@@ -1,17 +1,37 @@
 import { NextResponse } from "next/server";
 
 import { isConfigured } from "@/lib/config/env";
+import { prisma } from "@/lib/db/client";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * Actually round-trips to Postgres. Env-var presence proves nothing about
+ * connectivity — this is the check that does.
+ */
+async function probeDatabase() {
+  if (!isConfigured.database()) return { reachable: false, reason: "not configured" };
+  try {
+    const [merchants, conversations, announcements] = await Promise.all([
+      prisma.merchant.count(),
+      prisma.conversation.count(),
+      prisma.announcement.count(),
+    ]);
+    return { reachable: true, rows: { merchants, conversations, announcements } };
+  } catch (e) {
+    return { reachable: false, reason: (e as Error).message.slice(0, 200) };
+  }
+}
 
 /**
  * Deployment diagnostics. Reports ONLY which config groups resolve — never a
  * value, never a fragment of one. Exists so "is this env var reaching the
  * running function?" can be answered from outside instead of guessed at.
  */
-export function GET() {
+export async function GET() {
   return NextResponse.json({
     commit: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? "local",
+    db: await probeDatabase(),
     configured: {
       database: isConfigured.database(),
       supabase: isConfigured.supabase(),
