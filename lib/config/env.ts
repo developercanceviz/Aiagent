@@ -21,6 +21,9 @@ export const env = {
   get anthropicKey() {
     return process.env.ANTHROPIC_API_KEY;
   },
+  get openaiKey() {
+    return process.env.OPENAI_API_KEY;
+  },
   get encryptionKey() {
     return process.env.ENCRYPTION_KEY;
   },
@@ -46,7 +49,7 @@ export const env = {
 
 export const isConfigured = {
   database: () => Boolean(env.databaseUrl),
-  ai: () => Boolean(env.anthropicKey),
+  ai: () => Boolean(env.anthropicKey || env.openaiKey),
   ikas: () => Boolean(env.ikasClientId && env.ikasClientSecret),
   supabase: () => Boolean(env.supabaseUrl),
   embeddings: () => Boolean(env.embeddingsKey),

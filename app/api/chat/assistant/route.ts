@@ -18,7 +18,7 @@ export const maxDuration = 60;
 export async function POST(req: Request) {
   if (!isConfigured.ai()) {
     return Response.json(
-      { error: "AI not configured. Set ANTHROPIC_API_KEY." },
+      { error: "AI not configured. Set ANTHROPIC_API_KEY or OPENAI_API_KEY." },
       { status: 503 }
     );
   }
