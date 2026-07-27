@@ -13,13 +13,23 @@ export interface AppSession {
   storeId?: string;
 }
 
+const isProd = process.env.NODE_ENV === "production";
+
 export const sessionOptions: SessionOptions = {
   password: process.env.SECRET_COOKIE_PASSWORD ?? "dev-only-insecure-password-change-me-32+",
   cookieName: "canceviz_session",
   cookieOptions: {
-    secure: process.env.NODE_ENV === "production",
+    secure: isProd,
     httpOnly: true,
-    sameSite: "lax",
+    // The app also runs embedded in the ikas admin iframe (cross-site), where
+    // Lax cookies are never sent — the session bootstrap
+    // (/api/auth/ikas/session) sets this cookie from inside the frame and
+    // needs None to be readable there. `partitioned` (CHIPS) keeps the
+    // embedded copy scoped to the ikas top-level site, which is what lets
+    // Safari accept it. Dev stays Lax: None requires Secure, and localhost
+    // is http.
+    sameSite: isProd ? "none" : "lax",
+    ...(isProd ? { partitioned: true } : {}),
   },
 };
 

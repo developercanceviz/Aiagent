@@ -68,8 +68,25 @@ export function AppBridgeProvider({ children }: { children: ReactNode }) {
         AppBridgeHelper.closeLoader();
 
         const token = await AppBridgeHelper.getNewToken();
-        if (!cancelled) {
-          setState({ embedded: true, token: token ?? null, ready: true });
+        if (cancelled) return;
+        setState({ embedded: true, token: token ?? null, ready: true });
+
+        // Bootstrap the server session from the token so server-rendered
+        // pages know the tenant inside the iframe (cookies alone can't —
+        // they don't exist on first embedded load). Reload once when a
+        // fresh bind happens; "existing" answers cause no reload, so this
+        // cannot loop.
+        if (token) {
+          const res = await fetch("/api/auth/ikas/session", {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (res.ok) {
+            const { bound } = (await res.json()) as { bound: string };
+            if (bound === "new" && !cancelled) window.location.reload();
+          } else {
+            console.warn("[app-bridge] session bootstrap failed", res.status);
+          }
         }
       } catch (err) {
         console.error("[app-bridge] bootstrap failed", err);
