@@ -30,7 +30,8 @@ declare
   t text;
   tenant_tables text[] := array[
     'merchants','users','agents','channels','conversations',
-    'leads','knowledge_items','quick_replies','widget_configs'
+    'leads','knowledge_items','quick_replies','widget_configs',
+    'conversation_events'
   ];
 begin
   foreach t in array tenant_tables loop
@@ -61,7 +62,8 @@ declare
   t text;
   direct_tables text[] := array[
     'users','agents','channels','conversations',
-    'leads','knowledge_items','quick_replies','widget_configs'
+    'leads','knowledge_items','quick_replies','widget_configs',
+    'conversation_events'
   ];
 begin
   foreach t in array direct_tables loop
