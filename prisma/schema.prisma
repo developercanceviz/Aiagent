@@ -1,0 +1,282 @@
+// Canceviz AI Agent — data model.
+// Multi-tenant: every store-scoped row carries merchantId (the tenant FK).
+// RLS is enforced in Supabase (see supabase/policies.sql); Prisma queries are
+// additionally scoped by merchantId in the data-access layer (lib/db).
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  directUrl  = env("DIRECT_URL")
+  extensions = [vector, pgcrypto]
+}
+
+// ──────────────────────────── Enums ────────────────────────────
+enum Platform {
+  IKAS
+  SHOPIFY
+  GENERIC
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  AGENT
+}
+
+enum AgentStatus {
+  ACTIVE
+  PAUSED
+  DRAFT
+}
+
+enum ChannelType {
+  WEBCHAT
+  WHATSAPP
+  INSTAGRAM
+  MESSENGER
+}
+
+enum ChannelStatus {
+  CONNECTED
+  DISCONNECTED
+  ERROR
+}
+
+enum ConvStatus {
+  OPEN
+  AI_HANDLED
+  NEEDS_HUMAN
+  CLOSED
+}
+
+enum HandledBy {
+  AI
+  HUMAN
+}
+
+enum MsgRole {
+  CUSTOMER
+  AI
+  HUMAN_AGENT
+  SYSTEM
+}
+
+enum LeadStage {
+  YENI
+  GORUSMEDE
+  TAKIP
+  OLUMLU
+  OLUMSUZ
+}
+
+enum KbType {
+  FAQ
+  DOCUMENT
+  PRODUCT
+  POLICY
+}
+
+// ──────────────────────────── Models ────────────────────────────
+model Merchant {
+  id              String    @id @default(cuid())
+  platform        Platform  @default(IKAS)
+  externalStoreId String // ikas merchantId / storeId
+  storeName       String
+  storeDomain     String? // cancevizhurma.myikas.com
+  accessToken     String // ENCRYPTED (AES-256-GCM)
+  refreshToken    String? // ENCRYPTED
+  tokenExpiresAt  DateTime?
+  plan            String    @default("trial")
+  createdAt       DateTime  @default(now())
+
+  users          User[]
+  agents         Agent[]
+  channels       Channel[]
+  conversations  Conversation[]
+  leads          Lead[]
+  knowledgeItems KnowledgeItem[]
+  quickReplies   QuickReply[]
+  widgetConfig   WidgetConfig?
+
+  @@unique([platform, externalStoreId])
+  @@map("merchants")
+}
+
+model User {
+  id         String   @id @default(cuid())
+  merchantId String
+  email      String
+  role       Role     @default(OWNER)
+  createdAt  DateTime @default(now())
+  merchant   Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@unique([merchantId, email])
+  @@index([merchantId])
+  @@map("users")
+}
+
+model Agent {
+  id           String      @id @default(cuid())
+  merchantId   String
+  name         String
+  status       AgentStatus @default(ACTIVE)
+  persona      String      @default("")
+  systemPrompt String      @default("")
+  language     String      @default("tr")
+  merchant     Merchant    @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  channels     Channel[]
+
+  @@index([merchantId])
+  @@map("agents")
+}
+
+model Channel {
+  id          String        @id @default(cuid())
+  merchantId  String
+  agentId     String?
+  type        ChannelType
+  displayName String
+  externalId  String? // page id / phone number id / ig id
+  credentials String? // ENCRYPTED JSON
+  aiEnabled   Boolean       @default(true)
+  status      ChannelStatus @default(DISCONNECTED)
+  merchant    Merchant      @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  agent       Agent?        @relation(fields: [agentId], references: [id], onDelete: SetNull)
+
+  @@index([merchantId])
+  @@map("channels")
+}
+
+model Conversation {
+  id            String      @id @default(cuid())
+  merchantId    String
+  channelId     String
+  channelType   ChannelType
+  customerExtId String
+  customerName  String?
+  status        ConvStatus  @default(OPEN)
+  handledBy     HandledBy   @default(AI)
+  lastMessageAt DateTime    @default(now())
+  unreadCount   Int         @default(0)
+  starred       Boolean     @default(false)
+  archived      Boolean     @default(false)
+  createdAt     DateTime    @default(now())
+
+  messages Message[]
+  lead     Lead?
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@index([merchantId, lastMessageAt])
+  @@map("conversations")
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  role           MsgRole
+  content        String
+  toolCalls      Json?
+  tokensIn       Int?
+  tokensOut      Int?
+  createdAt      DateTime     @default(now())
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@map("messages")
+}
+
+model Lead {
+  id             String    @id @default(cuid())
+  merchantId     String
+  conversationId String?   @unique
+  name           String
+  contact        String?
+  stage          LeadStage @default(YENI)
+  tags           String[]
+  note           String?
+  orderPosition  Int       @default(0)
+  createdAt      DateTime  @default(now())
+  merchant       Merchant  @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+
+  @@index([merchantId, stage])
+  @@map("leads")
+}
+
+model KnowledgeItem {
+  id         String                       @id @default(cuid())
+  merchantId String
+  type       KbType
+  title      String
+  content    String
+  sourceRef  String? // ikas product id, file name, etc.
+  embedding  Unsupported("vector(1536)")?
+  updatedAt  DateTime                     @updatedAt
+  merchant   Merchant                     @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@index([merchantId, type])
+  @@map("knowledge_items")
+}
+
+model QuickReply {
+  id         String   @id @default(cuid())
+  merchantId String
+  title      String
+  content    String
+  createdAt  DateTime @default(now())
+  merchant   Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@index([merchantId])
+  @@map("quick_replies")
+}
+
+model WidgetConfig {
+  id           String   @id @default(cuid())
+  merchantId   String   @unique
+  theme        String   @default("creato")
+  primaryColor String   @default("#14DAAA")
+  headerBg     String   @default("#101216")
+  headerText   String   @default("#FFFFFF")
+  userMsgColor String   @default("#14DAAA")
+  botMsgColor  String   @default("#F4F4F5")
+  bubbleColor  String   @default("#14DAAA")
+  bubbleIcon   String   @default("#101216")
+  bubbleSize   Int      @default(60)
+  position     String   @default("bottom-right")
+  greeting     String   @default("Merhaba! 👋 Size nasıl yardımcı olabilirim?")
+  socialLinks  Json?
+  active       Boolean  @default(true)
+  merchant     Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@map("widget_configs")
+}
+
+// Audit trail — observability (principle §2.7). Tenant-scoped event log.
+model ConversationEvent {
+  id             String   @id @default(cuid())
+  merchantId     String
+  conversationId String?
+  type           String // e.g. "ai.reply", "human.takeover", "lead.captured", "escalated"
+  data           Json?
+  createdAt      DateTime @default(now())
+
+  @@index([merchantId, createdAt])
+  @@index([conversationId])
+  @@map("conversation_events")
+}
+
+// Platform-level (global, not tenant-scoped).
+model Announcement {
+  id          String   @id @default(cuid())
+  title       String
+  body        String
+  badge       String?
+  publishedAt DateTime @default(now())
+
+  @@map("announcements")
+}

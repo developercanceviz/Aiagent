@@ -1,0 +1,103 @@
+@import "tailwindcss";
+
+/*
+ * Canceviz AI Agent — design tokens (Creato-style)
+ * Primary green #14DAAA · dark surfaces #101216 · warm off-white app bg.
+ * Tailwind v4: tokens are declared in @theme and consumed as utilities
+ * (bg-primary, text-muted-foreground, rounded-2xl, etc.).
+ */
+
+@theme {
+  /* Brand */
+  --color-brand: #14daaa;
+  --color-brand-foreground: #042f27;
+  --color-brand-50: #e9fbf6;
+  --color-brand-100: #c7f5e8;
+  --color-brand-200: #93 ecd6;
+  --color-brand-500: #14daaa;
+  --color-brand-600: #0fb992;
+  --color-brand-700: #0c9476;
+
+  /* Dark surface (sidebar assistant card, header bg) */
+  --color-ink: #101216;
+  --color-ink-foreground: #ffffff;
+
+  /* Semantic surface tokens */
+  --color-background: #f4f4f5;
+  --color-foreground: #18181b;
+  --color-card: #ffffff;
+  --color-card-foreground: #18181b;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #18181b;
+  --color-primary: #14daaa;
+  --color-primary-foreground: #042f27;
+  --color-secondary: #f4f4f5;
+  --color-secondary-foreground: #18181b;
+  --color-muted: #f4f4f5;
+  --color-muted-foreground: #71717a;
+  --color-accent: #f4f4f5;
+  --color-accent-foreground: #18181b;
+  --color-destructive: #ef4444;
+  --color-destructive-foreground: #ffffff;
+  --color-border: #e4e4e7;
+  --color-input: #e4e4e7;
+  --color-ring: #14daaa;
+
+  /* Channel brand colors (charts, badges) */
+  --color-instagram: #e1306c;
+  --color-whatsapp: #25d366;
+  --color-messenger: #0084ff;
+  --color-webchat: #14daaa;
+
+  /* Chart palette */
+  --color-chart-1: #14daaa;
+  --color-chart-2: #0084ff;
+  --color-chart-3: #e1306c;
+  --color-chart-4: #f59e0b;
+  --color-chart-5: #8b5cf6;
+
+  /* Radii */
+  --radius-lg: 1rem;
+  --radius-xl: 1.25rem;
+  --radius-2xl: 1.5rem;
+
+  /* Typography */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+/* Fix the typo'd token cleanly without breaking the file */
+@theme {
+  --color-brand-200: #93ecd6;
+}
+
+* {
+  border-color: var(--color-border);
+}
+
+html,
+body {
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Thin, unobtrusive scrollbars to match the clean aesthetic */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: var(--color-border);
+  border-radius: 9999px;
+}
+
+/* Soft card shadow used across dashboard cards */
+@utility shadow-card {
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.04), 0 4px 16px -8px rgb(0 0 0 / 0.08);
+}
