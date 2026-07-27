@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { isConfigured } from "@/lib/config/env";
 import { prisma } from "@/lib/db/client";
+import { resolveTenant } from "@/lib/auth/context";
 
 export const dynamic = "force-dynamic";
 
@@ -28,10 +29,13 @@ async function probeDatabase() {
  * value, never a fragment of one. Exists so "is this env var reaching the
  * running function?" can be answered from outside instead of guessed at.
  */
-export async function GET() {
+export async function GET(req: Request) {
+  const tenant = await resolveTenant(req);
   return NextResponse.json({
     commit: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? "local",
     db: await probeDatabase(),
+    // How (and whether) the caller's tenant resolved — embedded vs standalone.
+    tenant: { resolved: Boolean(tenant.merchantId), source: tenant.source },
     configured: {
       database: isConfigured.database(),
       supabase: isConfigured.supabase(),

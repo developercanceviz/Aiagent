@@ -5,13 +5,18 @@ import { Send, Sparkles } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n/provider";
+import { ikasFetch } from "@/lib/ikas/fetch";
 
 export default function AsistanPage() {
   const { t } = useI18n();
   const a = t.assistant;
 
   const { messages, input, handleInputChange, handleSubmit, append, error, status } =
-    useChat({ api: "/api/chat/assistant" });
+    useChat({
+      api: "/api/chat/assistant",
+      // Carries the ikas App Bridge token when embedded; plain fetch otherwise.
+      fetch: ikasFetch as typeof fetch,
+    });
 
   const chips = [
     a.chips.ordersToday,

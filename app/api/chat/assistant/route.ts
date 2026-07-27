@@ -4,7 +4,7 @@ import { isConfigured } from "@/lib/config/env";
 import { getModel } from "@/lib/ai/provider";
 import { buildMerchantPrompt } from "@/lib/ai/prompt";
 import { buildMerchantTools } from "@/lib/ai/tools/merchant-tools";
-import { getCurrentMerchantId } from "@/lib/auth/session";
+import { requireMerchantId } from "@/lib/auth/context";
 import { getMerchant, getMerchantAdapter } from "@/lib/db/merchant";
 
 export const maxDuration = 60;
@@ -12,7 +12,8 @@ export const maxDuration = 60;
 /**
  * Merchant Store Assistant ("Soru Sor"). Streams a Claude response with the
  * merchant guardrails + analytics tools bound to THIS tenant's adapter. Tenant
- * is derived from the session — never the request body.
+ * is derived from verified credentials — an ikas App Bridge token when
+ * embedded, the session cookie when standalone — never the request body.
  */
 export async function POST(req: Request) {
   if (!isConfigured.ai()) {
@@ -28,7 +29,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const merchantId = await getCurrentMerchantId();
+  const merchantId = await requireMerchantId(req);
   if (!merchantId) {
     return Response.json({ error: "No store in session." }, { status: 401 });
   }
