@@ -39,9 +39,11 @@ interface RawOrder {
   status?: string;
   totalFinalPrice?: number;
   currencyCode?: string;
-  createdAt?: string;
+  /** Live API returns Timestamp as epoch millis (number), not ISO. */
+  createdAt?: string | number;
   customer?: { id?: string; email?: string; phone?: string } | null;
-  billingAddress?: { city?: string } | null;
+  // Live schema: city is an object (OrderAddressCity), not a scalar.
+  billingAddress?: { city?: { name?: string } | null } | null;
   orderLineItems?: Array<{
     quantity: number;
     finalPrice: number;
@@ -64,9 +66,22 @@ export function normalizeOrder(o: RawOrder): NormalizedOrder {
       unitPrice: { amount: li.finalPrice, currency },
     })),
     customerRef: o.customer?.id,
-    city: o.billingAddress?.city ?? undefined,
-    createdAt: o.createdAt ?? new Date().toISOString(),
+    city: o.billingAddress?.city?.name ?? undefined,
+    createdAt:
+      o.createdAt != null
+        ? new Date(o.createdAt).toISOString()
+        : new Date().toISOString(),
   };
+}
+
+// Live schema (2026-07-27): variant stock is a per-location list, images live
+// on variants (Product itself has no images/url fields).
+interface RawVariant {
+  id: string;
+  sku?: string;
+  stocks?: Array<{ stockCount?: number }>;
+  prices?: Array<{ sellPrice?: number; currency?: string | null; currencyCode?: string | null }>;
+  images?: Array<{ imageId?: string; isMain?: boolean; order?: number }>;
 }
 
 interface RawProduct {
@@ -74,20 +89,18 @@ interface RawProduct {
   name: string;
   description?: string;
   totalStock?: number;
-  variants?: Array<{
-    id: string;
-    sku?: string;
-    stockCount?: number;
-    prices?: Array<{ sellPrice?: number; currency?: string }>;
-  }>;
-  images?: Array<{ imageId?: string; order?: number }>;
-  url?: string;
+  variants?: RawVariant[];
+}
+
+export function variantStock(v: RawVariant): number {
+  return (v.stocks ?? []).reduce((sum, s) => sum + (s.stockCount ?? 0), 0);
 }
 
 export function normalizeProduct(p: RawProduct): NormalizedProduct {
   const firstVariant = p.variants?.[0];
   const firstPrice = firstVariant?.prices?.[0];
-  const currency = firstPrice?.currency ?? "TRY";
+  // Live data: `currency` is often null while `currencyCode` is populated.
+  const currency = firstPrice?.currencyCode ?? firstPrice?.currency ?? "TRY";
   return {
     id: p.id,
     name: p.name,
@@ -99,15 +112,16 @@ export function normalizeProduct(p: RawProduct): NormalizedProduct {
       title: v.sku ?? v.id,
       price: {
         amount: v.prices?.[0]?.sellPrice ?? 0,
-        currency: v.prices?.[0]?.currency ?? currency,
+        currency: v.prices?.[0]?.currencyCode ?? v.prices?.[0]?.currency ?? currency,
       },
-      stock: v.stockCount ?? 0,
+      stock: variantStock(v),
     })),
-    images: (p.images ?? [])
-      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+    images: (p.variants ?? [])
+      .flatMap((v) => v.images ?? [])
+      .sort((a, b) => Number(b.isMain ?? false) - Number(a.isMain ?? false) || (a.order ?? 0) - (b.order ?? 0))
       .map((i) => i.imageId ?? "")
       .filter(Boolean),
-    url: p.url,
+    url: undefined,
   };
 }
 

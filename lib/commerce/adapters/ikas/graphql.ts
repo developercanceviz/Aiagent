@@ -2,10 +2,13 @@
  * Minimal typed GraphQL client for the ikas Admin API. We POST hand-written
  * queries to https://api.myikas.com/api/v2/admin/graphql with a Bearer token.
  *
- * NOTE (Phase 1 verification): the exact field names below follow the ikas
- * Admin API (listOrder / listProduct / listCustomer with `data` + pagination).
- * Validate against live GraphQL codegen once credentials are available — these
- * selections are the spots to double-check.
+ * Field selections were validated against the LIVE schema via introspection on
+ * 2026-07-27 (Canceviz Hurma store). Notable realities vs. the docs:
+ *   - OrderAddress.city is an OBJECT (OrderAddressCity { name }), not a string.
+ *   - Product has NO `images`/`url`; images live on variants (ProductImage),
+ *     and variant stock is `stocks: [ProductStockLocation]`, not a count.
+ *   - The webhook mutation is `saveWebhooks(input: WebhookInput!)` with a
+ *     `scopes: [String]!` list — one call registers everything.
  */
 
 const DEFAULT_URL = "https://api.myikas.com/api/v2/admin/graphql";
@@ -58,7 +61,7 @@ export const LIST_ORDERS = /* GraphQL */ `
         currencyCode
         createdAt
         customer { id email phone }
-        billingAddress { city }
+        billingAddress { city { name } }
         orderLineItems {
           quantity
           finalPrice
@@ -82,11 +85,10 @@ export const LIST_PRODUCTS = /* GraphQL */ `
         variants {
           id
           sku
-          stockCount
-          prices { sellPrice currency }
+          stocks { stockCount }
+          prices { sellPrice currency currencyCode }
+          images { imageId isMain order }
         }
-        images { imageId order }
-        url
       }
     }
   }
@@ -102,8 +104,8 @@ export const LIST_CUSTOMERS = /* GraphQL */ `
   }
 `;
 
-export const SAVE_WEBHOOK = /* GraphQL */ `
-  mutation SaveWebhook($input: WebhookInput!) {
-    saveWebhook(input: $input) { id scope endpoint }
+export const SAVE_WEBHOOKS = /* GraphQL */ `
+  mutation SaveWebhooks($input: WebhookInput!) {
+    saveWebhooks(input: $input) { id scope endpoint }
   }
 `;

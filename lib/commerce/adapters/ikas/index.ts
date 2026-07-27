@@ -18,6 +18,7 @@ import {
 import {
   normalizeOrder,
   normalizeProduct,
+  variantStock,
   type RawOrder,
   type RawProduct,
 } from "@/lib/commerce/adapters/ikas/normalize";
@@ -159,7 +160,7 @@ export class IkasAdapter implements CommerceAdapter {
     });
     for (const p of data.listProduct.data) {
       const v = p.variants?.find((vr) => vr.id === variantId);
-      if (v) return v.stockCount ?? 0;
+      if (v) return variantStock(v);
     }
     return 0;
   }
