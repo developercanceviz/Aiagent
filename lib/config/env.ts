@@ -6,8 +6,17 @@
  */
 
 export const env = {
+  /**
+   * Vercel's Supabase integration provisions POSTGRES_PRISMA_URL /
+   * POSTGRES_URL_NON_POOLING automatically; DATABASE_URL / DIRECT_URL are the
+   * names the Prisma CLI expects locally. Accept either so a Vercel deploy
+   * needs no hand-copied duplicates.
+   */
   get databaseUrl() {
-    return process.env.DATABASE_URL;
+    return process.env.DATABASE_URL || process.env.POSTGRES_PRISMA_URL;
+  },
+  get directUrl() {
+    return process.env.DIRECT_URL || process.env.POSTGRES_URL_NON_POOLING;
   },
   get anthropicKey() {
     return process.env.ANTHROPIC_API_KEY;
