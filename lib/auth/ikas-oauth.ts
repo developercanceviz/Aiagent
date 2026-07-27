@@ -59,6 +59,43 @@ export async function exchangeCodeForToken(args: {
   return (await res.json()) as IkasTokenResponse;
 }
 
+/**
+ * Private-app ("Özel Uygulama") flow: no browser redirect, the app exchanges
+ * its client id+secret directly for a store-scoped token. This is how an app
+ * created in the STORE admin (Ayarlar → Uygulamalar → Özel Uygulama) connects —
+ * such apps have no redirect URI at all.
+ *
+ * The token endpoint lives on the store's own domain per the ikas app
+ * examples; the central v1 endpoint is tried as a fallback since neither has
+ * been validated live yet. Whichever answers 2xx wins.
+ */
+export async function clientCredentialsToken(
+  storeName: string
+): Promise<IkasTokenResponse> {
+  const body = new URLSearchParams({
+    grant_type: "client_credentials",
+    client_id: env.ikasClientId ?? "",
+    client_secret: env.ikasClientSecret ?? "",
+  });
+  const endpoints = [
+    `https://${storeName}.myikas.com/api/admin/oauth/token`,
+    `${IKAS_AUTH_BASE}/token`,
+  ];
+
+  let lastError = "";
+  for (const url of endpoints) {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body,
+    });
+    if (res.ok) return (await res.json()) as IkasTokenResponse;
+    lastError = `${url} → ${res.status} ${await res.text()}`;
+    console.warn("[ikas:client-credentials] endpoint failed:", lastError);
+  }
+  throw new Error(`ikas client_credentials failed: ${lastError}`);
+}
+
 export async function refreshAccessToken(
   refreshToken: string
 ): Promise<IkasTokenResponse> {
