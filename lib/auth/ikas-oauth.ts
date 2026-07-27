@@ -74,15 +74,18 @@ export async function clientCredentialsToken(
 ): Promise<IkasTokenResponse> {
   const body = new URLSearchParams({
     grant_type: "client_credentials",
-    client_id: env.ikasClientId ?? "",
-    client_secret: env.ikasClientSecret ?? "",
+    // Private-app credentials — distinct from the partner app's; see env.ts.
+    client_id: env.ikasPrivateClientId ?? "",
+    client_secret: env.ikasPrivateClientSecret ?? "",
   });
   const endpoints = [
     `https://${storeName}.myikas.com/api/admin/oauth/token`,
     `${IKAS_AUTH_BASE}/token`,
   ];
 
-  let lastError = "";
+  // Report EVERY endpoint's failure, not just the last — the fallback's 404
+  // otherwise masks the real rejection reason from the primary endpoint.
+  const failures: string[] = [];
   for (const url of endpoints) {
     const res = await fetch(url, {
       method: "POST",
@@ -90,10 +93,9 @@ export async function clientCredentialsToken(
       body,
     });
     if (res.ok) return (await res.json()) as IkasTokenResponse;
-    lastError = `${url} → ${res.status} ${await res.text()}`;
-    console.warn("[ikas:client-credentials] endpoint failed:", lastError);
+    failures.push(`${url} → ${res.status} ${(await res.text()).slice(0, 200)}`);
   }
-  throw new Error(`ikas client_credentials failed: ${lastError}`);
+  throw new Error(`ikas client_credentials failed: ${failures.join(" | ")}`);
 }
 
 export async function refreshAccessToken(

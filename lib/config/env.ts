@@ -33,6 +33,19 @@ export const env = {
   get ikasClientSecret() {
     return process.env.IKAS_CLIENT_SECRET;
   },
+  /**
+   * The store-admin "Özel Uygulama" credential set, used ONLY for the
+   * client_credentials grant (connect + self-refresh). Kept separate from the
+   * partner app's IKAS_CLIENT_* — the two apps have different ids and ikas
+   * rejects each in the other's flow. Falls back to the main pair so
+   * single-app setups keep working.
+   */
+  get ikasPrivateClientId() {
+    return process.env.IKAS_PRIVATE_CLIENT_ID || process.env.NEXT_PUBLIC_IKAS_CLIENT_ID;
+  },
+  get ikasPrivateClientSecret() {
+    return process.env.IKAS_PRIVATE_CLIENT_SECRET || process.env.IKAS_CLIENT_SECRET;
+  },
   get supabaseUrl() {
     return process.env.NEXT_PUBLIC_SUPABASE_URL;
   },

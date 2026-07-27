@@ -2,7 +2,7 @@ import type { Merchant } from "@prisma/client";
 
 import { prisma } from "@/lib/db/client";
 import { decryptSecret, encryptSecret } from "@/lib/crypto/secrets";
-import { refreshAccessToken } from "@/lib/auth/ikas-oauth";
+import { clientCredentialsToken, refreshAccessToken } from "@/lib/auth/ikas-oauth";
 
 /** Refresh the access token a few minutes before it expires. */
 const REFRESH_SKEW_MS = 5 * 60 * 1000;
@@ -18,8 +18,24 @@ export async function refreshIkasTokenIfNeeded(
   const expiresAt = merchant.tokenExpiresAt?.getTime() ?? 0;
   const needsRefresh = expiresAt - Date.now() < REFRESH_SKEW_MS;
 
-  if (!needsRefresh || !merchant.refreshToken) {
+  if (!needsRefresh) {
     return merchant;
+  }
+
+  // Private-app (client_credentials) tokens carry no refresh token — the
+  // grant is simply re-run. Without this, the connection silently dies a few
+  // hours after connect (observed live: 4h expiry, no refresh_token).
+  if (!merchant.refreshToken) {
+    const storeName =
+      merchant.storeDomain?.split(".")[0] ?? merchant.storeName;
+    const next = await clientCredentialsToken(storeName);
+    return prisma.merchant.update({
+      where: { id: merchant.id },
+      data: {
+        accessToken: encryptSecret(next.access_token),
+        tokenExpiresAt: new Date(Date.now() + next.expires_in * 1000),
+      },
+    });
   }
 
   const refreshToken = decryptSecret(merchant.refreshToken);
