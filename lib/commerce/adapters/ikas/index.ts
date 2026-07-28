@@ -67,20 +67,40 @@ export class IkasAdapter implements CommerceAdapter {
     limit?: number;
     cursor?: string;
   }): Promise<Paginated<NormalizedOrder>> {
-    const page = this.pageFromCursor(args.cursor);
     const limit = args.limit ?? 50;
+
+    // With a `since`, filter server-side (orderedAt) and walk pages forward —
+    // every page is in-range, so aggregation over the window is complete.
+    if (args.since) {
+      const page = this.pageFromCursor(args.cursor);
+      const data = await this.gql<{ listOrder: ListResult<RawOrder> }>(LIST_ORDERS, {
+        pagination: { page, limit },
+        orderedAt: { gte: args.since.getTime() },
+      });
+      const orders = data.listOrder.data.map(normalizeOrder);
+      return {
+        data: args.status ? orders.filter((o) => o.status === args.status) : orders,
+        cursor: data.listOrder.hasNext ? String(page + 1) : undefined,
+        hasNextPage: data.listOrder.hasNext,
+      };
+    }
+
+    // No `since` = "latest orders". The API ignores sort and returns
+    // oldest-first, so newest lives on the LAST page: read the count, jump to
+    // the tail, and walk backwards (cursor counts down).
+    const probe = await this.gql<{ listOrder: ListResult<RawOrder> }>(LIST_ORDERS, {
+      pagination: { page: 1, limit: 1 },
+    });
+    const lastPage = Math.max(1, Math.ceil(probe.listOrder.count / limit));
+    const page = args.cursor ? this.pageFromCursor(args.cursor) : lastPage;
     const data = await this.gql<{ listOrder: ListResult<RawOrder> }>(LIST_ORDERS, {
       pagination: { page, limit },
-      sort: "createdAt:desc",
     });
-    const orders = data.listOrder.data.map(normalizeOrder);
-    const filtered = args.since
-      ? orders.filter((o) => new Date(o.createdAt) >= args.since!)
-      : orders;
+    const orders = data.listOrder.data.map(normalizeOrder).reverse();
     return {
-      data: args.status ? filtered.filter((o) => o.status === args.status) : filtered,
-      cursor: data.listOrder.hasNext ? String(page + 1) : undefined,
-      hasNextPage: data.listOrder.hasNext,
+      data: args.status ? orders.filter((o) => o.status === args.status) : orders,
+      cursor: page > 1 ? String(page - 1) : undefined,
+      hasNextPage: page > 1,
     };
   }
 
@@ -88,38 +108,27 @@ export class IkasAdapter implements CommerceAdapter {
     orderNumber: string,
     verifier: OrderOwnershipVerifier
   ): Promise<NormalizedOrder | null> {
-    // Pull recent orders and match the number; then PROVE ownership before
-    // returning anything (no cross-customer leakage).
-    let cursor: string | undefined;
-    for (let i = 0; i < 5; i++) {
-      const page = await this.getOrders({ cursor, limit: 100 });
-      const match = page.data.find((o) => o.number === orderNumber);
-      if (match) {
-        const owns = await this.verifyOwnership(match, verifier);
-        return owns ? match : null;
-      }
-      if (!page.hasNextPage) break;
-      cursor = page.cursor;
-    }
-    return null;
-  }
+    if (!verifier.email && !verifier.phone) return null;
 
-  private async verifyOwnership(
-    order: NormalizedOrder,
-    verifier: OrderOwnershipVerifier
-  ): Promise<boolean> {
-    if (!verifier.email && !verifier.phone) return false;
-    // Re-fetch the matching raw order's customer contact to compare.
+    // Direct server-side lookup — scanning pages can never work against tens
+    // of thousands of oldest-first orders. Ownership is PROVEN against the
+    // same response's customer contact before anything is returned (no
+    // cross-customer leakage).
     const data = await this.gql<{ listOrder: ListResult<RawOrder> }>(LIST_ORDERS, {
-      pagination: { page: 1, limit: 100 },
-      sort: "createdAt:desc",
+      pagination: { page: 1, limit: 5 },
+      orderNumber: { eq: orderNumber },
     });
-    const raw = data.listOrder.data.find((o) => o.orderNumber === order.number);
-    const email = raw?.customer?.email?.toLowerCase().trim();
-    const phone = raw?.customer?.phone?.replace(/\D/g, "");
+    const raw = data.listOrder.data.find((o) => o.orderNumber === orderNumber);
+    if (!raw) return null;
+
+    const email = raw.customer?.email?.toLowerCase().trim();
+    const phone = raw.customer?.phone?.replace(/\D/g, "");
     const vEmail = verifier.email?.toLowerCase().trim();
     const vPhone = verifier.phone?.replace(/\D/g, "");
-    return Boolean((vEmail && vEmail === email) || (vPhone && vPhone && vPhone === phone));
+    const owns = Boolean(
+      (vEmail && vEmail === email) || (vPhone && phone && vPhone === phone)
+    );
+    return owns ? normalizeOrder(raw) : null;
   }
 
   async searchProducts(query: string): Promise<NormalizedProduct[]> {
@@ -199,10 +208,13 @@ export class IkasAdapter implements CommerceAdapter {
     const from = range.from ?? new Date(Date.now() - 7 * 86400_000);
     const to = range.to ?? new Date();
 
-    // Aggregate over recent orders (paged) within the range.
+    // Aggregate over the range — pages are server-side filtered (orderedAt),
+    // so every fetched order is in-window. Cap guards runaway ranges: 50
+    // pages × 100 = 5 000 orders (~5 weeks at this store's current volume);
+    // beyond that the summary is partial rather than the request failing.
     const orders: NormalizedOrder[] = [];
     let cursor: string | undefined;
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 50; i++) {
       const page = await this.getOrders({ cursor, limit: 100, since: from });
       orders.push(...page.data.filter((o) => new Date(o.createdAt) <= to));
       if (!page.hasNextPage) break;

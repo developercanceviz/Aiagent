@@ -48,9 +48,17 @@ export async function ikasGraphQL<T>(args: {
 
 // ── Query documents ────────────────────────────────────────────────────────
 
+// NOTE: the live API silently IGNORES the sort argument (verified against all
+// syntax variants) — results always come oldest-first. Recency must therefore
+// be expressed server-side via orderedAt, and "latest orders" via last-page
+// pagination, never via sort.
 export const LIST_ORDERS = /* GraphQL */ `
-  query ListOrders($pagination: PaginationInput, $sort: String) {
-    listOrder(pagination: $pagination, sort: $sort) {
+  query ListOrders(
+    $pagination: PaginationInput
+    $orderedAt: DateFilterInput
+    $orderNumber: StringFilterInput
+  ) {
+    listOrder(pagination: $pagination, orderedAt: $orderedAt, orderNumber: $orderNumber) {
       count
       hasNext
       data {
