@@ -51,7 +51,15 @@ export async function POST(req: Request) {
     messages: convertToCoreMessages(messages),
     tools: buildMerchantTools(adapter),
     maxSteps: 5,
+    onError: ({ error }) => {
+      console.error("[assistant] stream error:", error);
+    },
   });
 
-  return result.toDataStreamResponse();
+  // Merchant-facing internal tool: surface real error messages. (The
+  // customer-facing webchat route keeps the SDK's masking.)
+  return result.toDataStreamResponse({
+    getErrorMessage: (error) =>
+      error instanceof Error ? error.message : String(error),
+  });
 }
