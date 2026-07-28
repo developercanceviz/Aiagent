@@ -21,24 +21,40 @@ export interface RetrievedChunk {
 }
 
 export async function embed(text: string): Promise<number[]> {
+  const [vec] = await embedBatch([text]);
+  if (!vec) throw new Error("Embeddings response missing vector");
+  return vec;
+}
+
+/**
+ * Embed many texts in ONE API call (the endpoint accepts an array input).
+ * Per-item calls at ~1.7s each blew the 60s function budget on a 112-product
+ * sync; batching collapses a page of 50 into a single request.
+ */
+export async function embedBatch(texts: string[]): Promise<number[][]> {
   if (!isConfigured.embeddings()) {
     throw new Error("EMBEDDINGS_PROVIDER_KEY not set");
   }
+  if (texts.length === 0) return [];
   const res = await fetch(`${EMBED_BASE_URL}/embeddings`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${env.embeddingsKey}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ model: EMBED_MODEL, input: text.slice(0, 8000) }),
+    body: JSON.stringify({
+      model: EMBED_MODEL,
+      input: texts.map((t) => t.slice(0, 8000)),
+    }),
   });
   if (!res.ok) {
     throw new Error(`Embeddings HTTP ${res.status}: ${await res.text()}`);
   }
-  const json = (await res.json()) as { data: { embedding: number[] }[] };
-  const vec = json.data[0]?.embedding;
-  if (!vec) throw new Error("Embeddings response missing vector");
-  return vec;
+  const json = (await res.json()) as { data: { index: number; embedding: number[] }[] };
+  // The API documents order-matching, but sort by index to be safe.
+  const out: number[][] = new Array(texts.length);
+  for (const d of json.data) out[d.index] = d.embedding;
+  return out;
 }
 
 /**

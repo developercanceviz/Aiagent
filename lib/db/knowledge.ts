@@ -9,13 +9,17 @@ import type { KbType } from "@prisma/client";
  * re-syncs update in place. The embedding column is Unsupported() in Prisma,
  * so it's written via a raw query.
  */
-export async function upsertKnowledgeItem(args: {
-  merchantId: string;
-  type: KbType;
-  title: string;
-  content: string;
-  sourceRef?: string;
-}): Promise<string> {
+export async function upsertKnowledgeItem(
+  args: {
+    merchantId: string;
+    type: KbType;
+    title: string;
+    content: string;
+    sourceRef?: string;
+  },
+  /** Precomputed embedding (batch path) — skips the per-item embed call. */
+  precomputedVector?: number[]
+): Promise<string> {
   const existing = args.sourceRef
     ? await prisma.knowledgeItem.findFirst({
         where: { merchantId: args.merchantId, sourceRef: args.sourceRef },
@@ -38,9 +42,10 @@ export async function upsertKnowledgeItem(args: {
         },
       });
 
-  if (isConfigured.embeddings()) {
+  if (precomputedVector || isConfigured.embeddings()) {
     try {
-      const vector = await embed(`${args.title}\n${args.content}`);
+      const vector =
+        precomputedVector ?? (await embed(`${args.title}\n${args.content}`));
       const literal = `[${vector.join(",")}]`;
       await prisma.$executeRawUnsafe(
         `UPDATE "knowledge_items" SET embedding = $1::vector WHERE id = $2`,
