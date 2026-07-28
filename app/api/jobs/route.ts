@@ -3,8 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { runJob } from "@/lib/queue/handlers";
 import type { JobEnvelope } from "@/lib/queue/types";
 
-// Product sync embeds ~112 items sequentially; the default timeout kills it.
-export const maxDuration = 60;
+// Full-catalog sync needs headroom; fluid compute allows up to 300s.
+export const maxDuration = 300;
 
 /**
  * QStash consumer endpoint. QStash POSTs the job envelope here; we run the

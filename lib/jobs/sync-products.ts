@@ -52,17 +52,24 @@ export async function syncProductsToKnowledge(payload: {
       }
     }
 
-    for (let j = 0; j < items.length; j++) {
-      const it = items[j]!;
-      await upsertKnowledgeItem(
-        {
-          merchantId,
-          type: "PRODUCT",
-          title: it.product.name,
-          content: it.content,
-          sourceRef: it.product.id,
-        },
-        vectors[j]
+    // Upsert concurrently (3 DB roundtrips each; strictly sequential they
+    // dominated the runtime — 6 items/min observed). Chunked to stay within
+    // the pooled connection limit.
+    const CHUNK = 10;
+    for (let j = 0; j < items.length; j += CHUNK) {
+      await Promise.all(
+        items.slice(j, j + CHUNK).map((it, k) =>
+          upsertKnowledgeItem(
+            {
+              merchantId,
+              type: "PRODUCT",
+              title: it.product.name,
+              content: it.content,
+              sourceRef: it.product.id,
+            },
+            vectors[j + k]
+          )
+        )
       );
     }
 
