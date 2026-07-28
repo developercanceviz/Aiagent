@@ -13,18 +13,21 @@ export function buildMerchantTools(adapter: CommerceAdapter) {
     getSalesSummary: tool({
       description:
         "Belirtilen tarih aralığı için satış özeti: ciro, sipariş sayısı, ortalama sepet, günlük seri, en çok satan ürünler ve şehirler.",
+      // OpenAI strict mode requires every property in `required` — optionals
+      // are expressed as nullable, with the default applied in execute.
       parameters: z.object({
         fromDaysAgo: z
           .number()
           .int()
           .min(1)
           .max(365)
-          .default(7)
-          .describe("Bugünden kaç gün öncesinden başlasın"),
+          .nullable()
+          .describe("Bugünden kaç gün öncesinden başlasın; bilinmiyorsa null (7 varsayılır)"),
       }),
       execute: async ({ fromDaysAgo }) => {
+        const days = fromDaysAgo ?? 7;
         const range: DateRange = {
-          from: new Date(Date.now() - fromDaysAgo * 86400_000),
+          from: new Date(Date.now() - days * 86400_000),
           to: new Date(),
         };
         return adapter.getSalesSummary({ range });
@@ -41,7 +44,7 @@ export function buildMerchantTools(adapter: CommerceAdapter) {
       description:
         "Son siparişleri listeler. status verilirse o duruma göre filtreler (ör. PENDING, SHIPPED).",
       parameters: z.object({
-        limit: z.number().int().min(1).max(100).default(20),
+        limit: z.number().int().min(1).max(100).nullable().describe("Kaç sipariş; null ise 20"),
         status: z
           .enum([
             "PENDING",
@@ -53,10 +56,11 @@ export function buildMerchantTools(adapter: CommerceAdapter) {
             "REFUNDED",
             "UNKNOWN",
           ])
-          .optional(),
+          .nullable()
+          .describe("Durum filtresi; filtre yoksa null"),
       }),
       execute: async ({ limit, status }) => {
-        const page = await adapter.getOrders({ limit, status });
+        const page = await adapter.getOrders({ limit: limit ?? 20, status: status ?? undefined });
         return { orders: page.data, hasMore: page.hasNextPage };
       },
     }),
@@ -65,11 +69,12 @@ export function buildMerchantTools(adapter: CommerceAdapter) {
       description:
         "Verilen gün aralığında en çok satan ürünleri (adet ve ciro) döndürür.",
       parameters: z.object({
-        fromDaysAgo: z.number().int().min(1).max(365).default(30),
+        fromDaysAgo: z.number().int().min(1).max(365).nullable().describe("null ise 30"),
       }),
       execute: async ({ fromDaysAgo }) => {
+        const days = fromDaysAgo ?? 30;
         const summary = await adapter.getSalesSummary({
-          range: { from: new Date(Date.now() - fromDaysAgo * 86400_000), to: new Date() },
+          range: { from: new Date(Date.now() - days * 86400_000), to: new Date() },
         });
         return { topProducts: summary.topProducts };
       },

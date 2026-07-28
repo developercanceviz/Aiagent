@@ -48,16 +48,21 @@ export function buildCustomerTools(ctx: CustomerToolContext) {
     getOrderStatus: tool({
       description:
         "Sipariş durumunu döndürür. SADECE müşteri kendi sipariş numarasını ve eşleşen e-posta VEYA telefon bilgisini verirse çalışır. Eşleşme yoksa sipariş bilgisi paylaşma.",
+      // Nullable (not optional): OpenAI strict mode requires every property
+      // to be listed in `required`.
       parameters: z.object({
         orderNumber: z.string().min(1),
-        email: z.string().email().optional(),
-        phone: z.string().min(7).optional(),
+        email: z.string().email().nullable().describe("Müşterinin verdiği e-posta; yoksa null"),
+        phone: z.string().min(7).nullable().describe("Müşterinin verdiği telefon; yoksa null"),
       }),
       execute: async ({ orderNumber, email, phone }) => {
         if (!email && !phone) {
           return { verified: false, reason: "E-posta veya telefon gerekli." };
         }
-        const order = await ctx.adapter.getOrderByNumber(orderNumber, { email, phone });
+        const order = await ctx.adapter.getOrderByNumber(orderNumber, {
+          email: email ?? undefined,
+          phone: phone ?? undefined,
+        });
         if (!order) {
           return { verified: false, reason: "Doğrulama başarısız veya sipariş bulunamadı." };
         }
@@ -99,8 +104,8 @@ export function buildCustomerTools(ctx: CustomerToolContext) {
       description: "Müşteri iletişim/ilgi bilgisi verdiğinde CRM'e yeni lead ekler.",
       parameters: z.object({
         name: z.string().min(1),
-        contact: z.string().optional(),
-        intent: z.string().optional(),
+        contact: z.string().nullable().describe("Telefon/e-posta; yoksa null"),
+        intent: z.string().nullable().describe("İlgi/istek özeti; yoksa null"),
       }),
       execute: async ({ name, contact, intent }) => {
         if (isConfigured.database()) {
