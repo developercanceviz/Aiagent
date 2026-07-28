@@ -1,14 +1,23 @@
+import { after } from "next/server";
+
 import { env, isConfigured } from "@/lib/config/env";
 import type { JobEnvelope, QueueDriver } from "@/lib/queue/types";
 import { runJob } from "@/lib/queue/handlers";
 
-/** Inline driver — runs the handler immediately. Dev/no-QStash fallback. */
+/** Inline driver — runs the handler in the same invocation. No-QStash fallback. */
 const inlineDriver: QueueDriver = {
   kind: "inline",
   async enqueue(job) {
-    // Fire-and-forget so the webhook ACKs fast even in inline mode.
-    void runJob(job).catch((err) => {
-      console.error(`[queue:inline] job ${job.name} failed`, err);
+    // after() keeps the serverless function alive past the response. A bare
+    // `void runJob(...)` gets KILLED the moment the response is sent —
+    // observed live: the on-connect product sync died after 1 of 112
+    // products. The response still returns fast; the work runs after it.
+    after(async () => {
+      try {
+        await runJob(job);
+      } catch (err) {
+        console.error(`[queue:inline] job ${job.name} failed`, err);
+      }
     });
   },
 };

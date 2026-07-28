@@ -3,6 +3,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { runJob } from "@/lib/queue/handlers";
 import type { JobEnvelope } from "@/lib/queue/types";
 
+// Product sync embeds ~112 items sequentially; the default timeout kills it.
+export const maxDuration = 60;
+
 /**
  * QStash consumer endpoint. QStash POSTs the job envelope here; we run the
  * handler. (Signature verification with @upstash/qstash is added when
