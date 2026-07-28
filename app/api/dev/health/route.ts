@@ -60,5 +60,14 @@ export async function GET(req: Request) {
       cookiePassword: Boolean(process.env.SECRET_COOKIE_PASSWORD),
       serviceRoleKey: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
     },
+    // Client ids are identifiers, not secrets — an 8-char prefix is enough to
+    // tell WHICH app's credentials a deployment is actually running with,
+    // which keeps "did the env change land?" answerable. Secrets stay boolean.
+    ikasApps: {
+      partnerClientId: process.env.NEXT_PUBLIC_IKAS_CLIENT_ID?.slice(0, 8) ?? null,
+      partnerSecretSet: Boolean(process.env.IKAS_CLIENT_SECRET),
+      privateClientId: process.env.IKAS_PRIVATE_CLIENT_ID?.slice(0, 8) ?? null,
+      privateSecretSet: Boolean(process.env.IKAS_PRIVATE_CLIENT_SECRET),
+    },
   });
 }
