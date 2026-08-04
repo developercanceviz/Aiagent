@@ -52,6 +52,17 @@ export async function ikasGraphQL<T>(args: {
 // syntax variants) — results always come oldest-first. Recency must therefore
 // be expressed server-side via orderedAt, and "latest orders" via last-page
 // pagination, never via sort.
+// Who does this token belong to? Used by the OAuth callback — ikas does not
+// pass the store in callback query params; the token itself is the source.
+export const GET_MERCHANT = /* GraphQL */ `
+  query getMerchant {
+    getMerchant {
+      id
+      storeName
+    }
+  }
+`;
+
 export const LIST_ORDERS = /* GraphQL */ `
   query ListOrders(
     $pagination: PaginationInput

@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { env, isConfigured } from "@/lib/config/env";
-import { exchangeCodeForToken } from "@/lib/auth/ikas-oauth";
+import { exchangeCodeForToken, readStoreIdFromToken } from "@/lib/auth/ikas-oauth";
 import { storeIkasTokens } from "@/lib/auth/ikas-token";
+import { GET_MERCHANT, ikasGraphQL } from "@/lib/commerce/adapters/ikas/graphql";
 import { registerIkasWebhooks } from "@/lib/commerce/adapters/ikas/webhooks";
 import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/client";
@@ -22,8 +23,6 @@ export async function GET(req: NextRequest) {
   const params = req.nextUrl.searchParams;
   const code = params.get("code");
   const state = params.get("state");
-  const storeId = params.get("merchantId") ?? params.get("storeId") ?? "";
-  const storeName = params.get("storeName") ?? "Mağaza";
 
   const session = await getSession();
   if (!code || !state || state !== session.oauthState) {
@@ -32,6 +31,32 @@ export async function GET(req: NextRequest) {
 
   const redirectUri = `${env.deployUrl}/api/auth/ikas/callback`;
   const token = await exchangeCodeForToken({ code, redirectUri });
+
+  // ikas does NOT identify the store in callback params (only code/state/
+  // signature) — the token itself is the source of truth. Ask the API who it
+  // belongs to; fall back to the token's JWT claims, then to legacy params.
+  let storeId = "";
+  let storeName = params.get("storeName") ?? "Mağaza";
+  try {
+    const data = await ikasGraphQL<{
+      getMerchant: { id: string; storeName: string | null } | null;
+    }>({ accessToken: token.access_token, query: GET_MERCHANT });
+    storeId = data.getMerchant?.id ?? "";
+    storeName = data.getMerchant?.storeName ?? storeName;
+  } catch (err) {
+    console.error("[ikas:callback] getMerchant failed, using token claims", err);
+  }
+  storeId ||=
+    readStoreIdFromToken(token.access_token) ??
+    params.get("merchantId") ??
+    params.get("storeId") ??
+    "";
+  if (!storeId) {
+    return NextResponse.json(
+      { error: "Could not determine the store this authorization belongs to." },
+      { status: 502 }
+    );
+  }
 
   // Upsert merchant (encrypt the access token at write time; refresh stored separately).
   const merchant = await prisma.merchant.upsert({

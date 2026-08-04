@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { env, isConfigured } from "@/lib/config/env";
-import { clientCredentialsToken } from "@/lib/auth/ikas-oauth";
+import { clientCredentialsToken, readStoreIdFromToken } from "@/lib/auth/ikas-oauth";
 import { storeIkasTokens } from "@/lib/auth/ikas-token";
 import { registerIkasWebhooks } from "@/lib/commerce/adapters/ikas/webhooks";
 import { getSession } from "@/lib/auth/session";
@@ -67,7 +67,7 @@ export async function GET(req: NextRequest) {
   // The access token is a JWT whose payload carries the store identity.
   // Received directly from ikas over TLS, so decode without verification and
   // fall back to the storeName if the expected claim isn't there.
-  const externalStoreId = readStoreId(token.access_token) ?? storeName;
+  const externalStoreId = readStoreIdFromToken(token.access_token) ?? storeName;
 
   const existing = await prisma.merchant.findFirst({ select: { id: true, externalStoreId: true } });
   if (existing && existing.externalStoreId !== externalStoreId) {
@@ -117,20 +117,4 @@ export async function GET(req: NextRequest) {
       ? returnTo
       : "/dev/ikas-check";
   return NextResponse.redirect(`${env.deployUrl}${dest}`);
-}
-
-/** Best-effort JWT payload decode — no verification, provenance is direct TLS. */
-function readStoreId(accessToken: string): string | null {
-  try {
-    const payload = JSON.parse(
-      Buffer.from(accessToken.split(".")[1] ?? "", "base64url").toString("utf8")
-    ) as Record<string, unknown>;
-    for (const claim of ["merchantId", "storeId", "sub"]) {
-      const v = payload[claim];
-      if (typeof v === "string" && v.length > 0) return v;
-    }
-    return null;
-  } catch {
-    return null;
-  }
 }

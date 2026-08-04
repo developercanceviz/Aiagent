@@ -98,6 +98,26 @@ export async function clientCredentialsToken(
   throw new Error(`ikas client_credentials failed: ${failures.join(" | ")}`);
 }
 
+/**
+ * Best-effort JWT payload decode to find the store id inside an ikas access
+ * token — no signature verification; the token came to us directly from ikas
+ * over TLS. Claims seen live: `merchantId` = store id, `sub` = install id.
+ */
+export function readStoreIdFromToken(accessToken: string): string | null {
+  try {
+    const payload = JSON.parse(
+      Buffer.from(accessToken.split(".")[1] ?? "", "base64url").toString("utf8")
+    ) as Record<string, unknown>;
+    for (const claim of ["merchantId", "storeId", "sub"]) {
+      const v = payload[claim];
+      if (typeof v === "string" && v.length > 0) return v;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export async function refreshAccessToken(
   refreshToken: string
 ): Promise<IkasTokenResponse> {
