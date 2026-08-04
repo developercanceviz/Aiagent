@@ -28,12 +28,13 @@ export async function GET(req: NextRequest) {
   if (!code) {
     return NextResponse.json({ error: "Missing authorization code" }, { status: 400 });
   }
-  // CSRF state is only present when the flow started at our /authorize route.
-  // ikas-initiated installs ("Uygulama Kur" in the admin panel) redirect
-  // straight here with just code+storeName — no state exists to check. The
-  // code exchange below is the authenticity proof in that flow: only ikas can
-  // mint a code our client_secret can redeem.
-  if (session.oauthState && state !== session.oauthState) {
+  // CSRF state only exists when the flow started at our /authorize route — a
+  // returned state must match the session's. ikas-initiated installs
+  // ("Uygulama Kur" in the admin panel) redirect straight here with just
+  // code+storeName and NO state; a stale session state from an abandoned
+  // authorize attempt must not block them. In that flow the code exchange
+  // below is the authenticity proof: only ikas can mint a redeemable code.
+  if (state && state !== session.oauthState) {
     return NextResponse.json({ error: "Invalid OAuth state" }, { status: 400 });
   }
 
