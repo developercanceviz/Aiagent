@@ -21,6 +21,8 @@
   }
   var origin = new URL(script.src).origin;
 
+  var mobileQuery = window.matchMedia("(max-width: 640px)");
+
   function build(config) {
     var primary = (config && config.primaryColor) || "#14DAAA";
     var size = (config && config.bubbleSize) || 60;
@@ -29,12 +31,6 @@
     // Bubble
     var bubble = document.createElement("button");
     bubble.setAttribute("aria-label", "Sohbeti aç");
-    bubble.style.cssText =
-      "position:fixed;bottom:20px;" +
-      (rightSide ? "right:20px;" : "left:20px;") +
-      "width:" + size + "px;height:" + size + "px;border:none;border-radius:9999px;" +
-      "background:" + primary + ";box-shadow:0 8px 24px rgba(0,0,0,.2);cursor:pointer;" +
-      "z-index:2147483646;display:flex;align-items:center;justify-content:center;";
     bubble.innerHTML =
       '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="' +
       ((config && config.bubbleIcon) || "#101216") +
@@ -44,23 +40,48 @@
     // Iframe panel
     var frame = document.createElement("iframe");
     frame.src = origin + "/widget/" + encodeURIComponent(merchantId);
-    frame.style.cssText =
-      "position:fixed;bottom:90px;" +
-      (rightSide ? "right:20px;" : "left:20px;") +
-      "width:380px;max-width:calc(100vw - 40px);height:600px;max-height:calc(100vh - 120px);" +
-      "border:none;border-radius:24px;box-shadow:0 16px 48px rgba(0,0,0,.24);" +
-      "z-index:2147483647;display:none;background:#fff;";
 
     var open = false;
+
+    // Responsive layout, re-applied on viewport changes:
+    //  - mobile: bubble raised above store bottom bars ("Hesabım" row);
+    //    panel opens full-screen (100dvh handles iOS URL-bar chrome).
+    //  - desktop: classic floating 380x600 panel above the bubble.
+    function layout() {
+      var mobile = mobileQuery.matches;
+      bubble.style.cssText =
+        "position:fixed;" +
+        "bottom:" + (mobile ? "84px" : "20px") + ";" +
+        (rightSide ? "right:16px;" : "left:16px;") +
+        "width:" + size + "px;height:" + size + "px;border:none;border-radius:9999px;" +
+        "background:" + primary + ";box-shadow:0 8px 24px rgba(0,0,0,.2);cursor:pointer;" +
+        "z-index:2147483646;display:flex;align-items:center;justify-content:center;";
+      frame.style.cssText =
+        "position:fixed;border:none;background:#fff;z-index:2147483647;" +
+        "display:" + (open ? "block" : "none") + ";" +
+        (mobile
+          ? "top:0;left:0;right:0;bottom:0;width:100vw;height:100%;height:100dvh;border-radius:0;"
+          : "bottom:90px;" +
+            (rightSide ? "right:20px;" : "left:20px;") +
+            "width:380px;max-width:calc(100vw - 40px);height:600px;max-height:calc(100vh - 120px);" +
+            "border-radius:24px;box-shadow:0 16px 48px rgba(0,0,0,.24);");
+    }
+    layout();
+    if (mobileQuery.addEventListener) {
+      mobileQuery.addEventListener("change", layout);
+    } else if (mobileQuery.addListener) {
+      mobileQuery.addListener(layout); // older Safari
+    }
+
     function toggle() {
       open = !open;
-      frame.style.display = open ? "block" : "none";
+      layout();
     }
     bubble.addEventListener("click", toggle);
     window.addEventListener("message", function (e) {
       if (e.data === "canceviz:close") {
         open = false;
-        frame.style.display = "none";
+        layout();
       }
     });
 
