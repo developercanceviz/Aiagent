@@ -7,6 +7,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 import type { WidgetConfigDTO } from "@/lib/db/widget";
+import { DevCredit } from "@/components/layout/dev-credit";
 
 /** Stable per-visitor session id (one conversation per browser). */
 function useSessionId() {
@@ -105,10 +106,9 @@ export function LiveWidget({
         </button>
       </form>
 
-      <p className="pb-2 text-center text-[10px] text-zinc-400">
-        <span className="font-semibold text-zinc-500">Paksoft</span> tarafından
-        geliştirilmiştir
-      </p>
+      <div className="flex justify-center pb-2">
+        <DevCredit className="scale-90" />
+      </div>
     </div>
   );
 }

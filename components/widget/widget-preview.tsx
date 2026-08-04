@@ -1,6 +1,7 @@
 import { Send, X } from "lucide-react";
 
 import { ChannelIcon } from "@/components/channel-icon";
+import { DevCredit } from "@/components/layout/dev-credit";
 import { demoStore } from "@/lib/config/brand";
 import type { WidgetTheme } from "@/lib/config/widget-themes";
 
@@ -79,10 +80,9 @@ export function WidgetPreview({
       </div>
 
       {/* Footer */}
-      <p className="pb-3 text-center text-[10px] text-zinc-400">
-        <span className="font-semibold text-zinc-500">Paksoft</span> tarafından
-        geliştirilmiştir
-      </p>
+      <div className="flex justify-center pb-3">
+        <DevCredit className="scale-90" />
+      </div>
     </div>
   );
 }

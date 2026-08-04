@@ -10,6 +10,7 @@ import { useI18n } from "@/lib/i18n/provider";
 import { navItems } from "@/lib/config/nav";
 import { demoStore } from "@/lib/config/brand";
 import { BrandLogo } from "@/components/layout/brand-logo";
+import { DevCredit } from "@/components/layout/dev-credit";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   Tooltip,
@@ -147,9 +148,9 @@ export function Sidebar() {
           )}
         </div>
         {!collapsed && (
-          <p className="pt-2 text-center text-[10px] text-muted-foreground/70">
-            {t.brand.developedBy}
-          </p>
+          <div className="flex justify-center pt-2.5">
+            <DevCredit />
+          </div>
         )}
       </div>
     </aside>
