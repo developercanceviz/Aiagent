@@ -3,6 +3,7 @@
 import { useChat } from "@ai-sdk/react";
 import { Send, Sparkles } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 import { cn } from "@/lib/utils";
 import type { Dictionary } from "@/lib/i18n";
@@ -70,8 +71,10 @@ export default function AsistanPage() {
                   {m.role === "user" ? (
                     m.content
                   ) : m.content ? (
-                    <div className="whitespace-normal space-y-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_ul]:list-disc [&_ul]:pl-5 [&_strong]:font-semibold">
-                      <ReactMarkdown>{m.content}</ReactMarkdown>
+                    <div className="whitespace-normal space-y-2 overflow-x-auto [&_ol]:list-decimal [&_ol]:pl-5 [&_ul]:list-disc [&_ul]:pl-5 [&_strong]:font-semibold [&_table]:w-full [&_table]:border-collapse [&_th]:border [&_th]:border-border [&_th]:px-2 [&_th]:py-1 [&_th]:text-left [&_th]:font-semibold [&_td]:border [&_td]:border-border [&_td]:px-2 [&_td]:py-1">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {m.content}
+                      </ReactMarkdown>
                     </div>
                   ) : busy ? (
                     "…"
