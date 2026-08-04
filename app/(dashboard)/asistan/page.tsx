@@ -2,8 +2,10 @@
 
 import { useChat } from "@ai-sdk/react";
 import { Send, Sparkles } from "lucide-react";
+import ReactMarkdown from "react-markdown";
 
 import { cn } from "@/lib/utils";
+import type { Dictionary } from "@/lib/i18n";
 import { useI18n } from "@/lib/i18n/provider";
 import { ikasFetch } from "@/lib/ikas/fetch";
 
@@ -65,7 +67,17 @@ export default function AsistanPage() {
                       : "bg-muted text-foreground"
                   )}
                 >
-                  {m.content || (busy ? "…" : "")}
+                  {m.role === "user" ? (
+                    m.content
+                  ) : m.content ? (
+                    <div className="whitespace-normal space-y-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_ul]:list-disc [&_ul]:pl-5 [&_strong]:font-semibold">
+                      <ReactMarkdown>{m.content}</ReactMarkdown>
+                    </div>
+                  ) : busy ? (
+                    "…"
+                  ) : (
+                    ""
+                  )}
                 </div>
               </div>
             ))}
@@ -73,13 +85,7 @@ export default function AsistanPage() {
         )}
       </div>
 
-      {error && (
-        <div className="mx-4 mb-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-800">
-          Asistan henüz canlı veriye bağlı değil. ikas mağazasını bağlayın ve
-          ANTHROPIC_API_KEY ekleyin; sonra sorularınızı gerçek verilerle
-          yanıtlayacağım.
-        </div>
-      )}
+      {error && <ErrorBanner message={error.message} t={a} />}
 
       <form onSubmit={handleSubmit} className="border-t border-border/60 p-4">
         <div className="mx-auto flex max-w-2xl items-center gap-2 rounded-2xl border border-input bg-card px-4 py-2 shadow-sm focus-within:ring-2 focus-within:ring-ring">
@@ -98,6 +104,47 @@ export default function AsistanPage() {
           </button>
         </div>
       </form>
+    </div>
+  );
+}
+
+/**
+ * The API sends structured JSON errors ({"error": "..."}); stream errors
+ * arrive as plain text. Show the real reason — and for a lost session, a
+ * one-click reconnect that lands straight back on this page.
+ */
+function ErrorBanner({
+  message,
+  t,
+}: {
+  message: string;
+  t: Dictionary["assistant"];
+}) {
+  let detail = message;
+  try {
+    detail = (JSON.parse(message) as { error?: string }).error ?? message;
+  } catch {
+    // not JSON — keep the raw message
+  }
+  const sessionLost = detail.includes("No store in session");
+
+  return (
+    <div className="mx-4 mb-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-800">
+      {sessionLost ? (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span>{t.errorSession}</span>
+          <a
+            href="/api/auth/ikas/connect?returnTo=/asistan"
+            className="shrink-0 rounded-lg bg-amber-700 px-3 py-1.5 font-medium text-amber-50 transition-colors hover:bg-amber-800"
+          >
+            {t.errorSessionCta}
+          </a>
+        </div>
+      ) : (
+        <span>
+          {t.errorGeneric} {detail}
+        </span>
+      )}
     </div>
   );
 }

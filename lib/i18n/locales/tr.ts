@@ -24,6 +24,10 @@ export const tr = {
     greeting: "Merhaba! 👋",
     subtitle: "Mağazanız hakkında her şeyi sorabilirsiniz.",
     placeholder: "Mağazanız hakkında bir şey sorun...",
+    errorSession:
+      "Oturumunuz bulunamadı. Mağaza bağlantısını yenileyin; asistan sonrasında gerçek verilerle yanıtlar.",
+    errorSessionCta: "Mağazayı Yeniden Bağla",
+    errorGeneric: "Asistan yanıt veremedi:",
     chips: {
       ordersToday: "Bugün kaç sipariş geldi?",
       revenue7d: "Son 7 günün ciro özeti nedir?",

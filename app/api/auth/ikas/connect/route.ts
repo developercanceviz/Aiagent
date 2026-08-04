@@ -30,9 +30,26 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const storeName = req.nextUrl.searchParams.get("storeName");
-  if (!storeName || !/^[a-z0-9-]+$/i.test(storeName)) {
-    return NextResponse.json({ error: "storeName is required (e.g. ?storeName=cancevizhurma)" }, { status: 400 });
+  let storeName = req.nextUrl.searchParams.get("storeName");
+  if (storeName && !/^[a-z0-9-]+$/i.test(storeName)) {
+    return NextResponse.json({ error: "Invalid storeName." }, { status: 400 });
+  }
+
+  // Reconnect convenience: when the store is already connected, the client
+  // doesn't need to know (or hardcode) the slug — infer it from the one
+  // existing Merchant. First-ever connect still requires ?storeName=.
+  if (!storeName) {
+    const connected = await prisma.merchant.findFirst({
+      select: { storeDomain: true, storeName: true },
+    });
+    storeName =
+      connected?.storeDomain?.split(".")[0] ?? connected?.storeName ?? null;
+    if (!storeName || !/^[a-z0-9-]+$/i.test(storeName)) {
+      return NextResponse.json(
+        { error: "storeName is required (e.g. ?storeName=cancevizhurma)" },
+        { status: 400 }
+      );
+    }
   }
 
   let token;
@@ -92,7 +109,14 @@ export async function GET(req: NextRequest) {
   session.storeId = externalStoreId;
   await session.save();
 
-  return NextResponse.redirect(`${env.deployUrl}/dev/ikas-check`);
+  // Optional post-connect destination. Relative paths only — an absolute URL
+  // here would be an open redirect.
+  const returnTo = req.nextUrl.searchParams.get("returnTo");
+  const dest =
+    returnTo && returnTo.startsWith("/") && !returnTo.startsWith("//")
+      ? returnTo
+      : "/dev/ikas-check";
+  return NextResponse.redirect(`${env.deployUrl}${dest}`);
 }
 
 /** Best-effort JWT payload decode — no verification, provenance is direct TLS. */
