@@ -2,25 +2,17 @@ import { cn } from "@/lib/utils";
 import { brandConfig } from "@/lib/config/brand";
 
 /**
- * Configurable brand wordmark. Default = agency brand (NOT "Creato").
- * Swap `brandConfig.wordmark` or pass `label` to rebrand per deployment.
+ * Configurable brand lockup. Renders /logo.png (drop a new file in /public to
+ * rebrand); the wordmark from brandConfig stays as the accessible name.
  */
-export function BrandLogo({
-  className,
-  label = brandConfig.wordmark,
-}: {
-  className?: string;
-  label?: string;
-}) {
+export function BrandLogo({ className }: { className?: string }) {
   return (
-    <span
-      className={cn(
-        "select-none text-sm font-semibold tracking-[0.18em] text-foreground",
-        className
-      )}
-    >
-      {label}
-    </span>
+    // eslint-disable-next-line @next/next/no-img-element -- static local asset
+    <img
+      src="/logo.png"
+      alt={brandConfig.name}
+      className={cn("h-8 w-auto select-none", className)}
+    />
   );
 }
 

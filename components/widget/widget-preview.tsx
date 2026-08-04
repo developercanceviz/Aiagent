@@ -80,7 +80,8 @@ export function WidgetPreview({
 
       {/* Footer */}
       <p className="pb-3 text-center text-[10px] text-zinc-400">
-        Powered by <span className="font-semibold text-zinc-500">CANCEVIZ AI</span>
+        <span className="font-semibold text-zinc-500">Paksoft</span> tarafından
+        geliştirilmiştir
       </p>
     </div>
   );

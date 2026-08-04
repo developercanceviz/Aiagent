@@ -146,6 +146,11 @@ export function Sidebar() {
             </div>
           )}
         </div>
+        {!collapsed && (
+          <p className="pt-2 text-center text-[10px] text-muted-foreground/70">
+            {t.brand.developedBy}
+          </p>
+        )}
       </div>
     </aside>
   );

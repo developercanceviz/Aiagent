@@ -3,8 +3,7 @@
 import { useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 
-import { brandConfig } from "@/lib/config/brand";
-import { BrandMark } from "@/components/layout/brand-logo";
+import { BrandLogo } from "@/components/layout/brand-logo";
 
 export function Topbar() {
   const router = useRouter();
@@ -17,10 +16,7 @@ export function Topbar() {
       >
         <ArrowLeft className="size-4" />
       </button>
-      <BrandMark />
-      <span className="text-lg font-semibold tracking-tight text-foreground">
-        {brandConfig.productName}
-      </span>
+      <BrandLogo className="h-9" />
     </header>
   );
 }

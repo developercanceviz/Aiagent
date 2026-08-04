@@ -3,6 +3,8 @@
 import * as React from "react";
 import { useChat } from "@ai-sdk/react";
 import { Send, X } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 import type { WidgetConfigDTO } from "@/lib/db/widget";
 
@@ -73,7 +75,15 @@ export function LiveWidget({
             side={m.role === "user" ? "user" : "bot"}
             color={m.role === "user" ? config.userMsgColor : config.botMsgColor}
           >
-            {m.content || (busy ? "…" : "")}
+            {m.role === "user" ? (
+              m.content
+            ) : m.content ? (
+              <Markdown>{m.content}</Markdown>
+            ) : busy ? (
+              "…"
+            ) : (
+              ""
+            )}
           </Bubble>
         ))}
       </div>
@@ -96,8 +106,18 @@ export function LiveWidget({
       </form>
 
       <p className="pb-2 text-center text-[10px] text-zinc-400">
-        Powered by <span className="font-semibold text-zinc-500">CANCEVIZ AI</span>
+        <span className="font-semibold text-zinc-500">Paksoft</span> tarafından
+        geliştirilmiştir
       </p>
+    </div>
+  );
+}
+
+/** Bot replies carry markdown (bold, lists, tables) — render, don't show raw. */
+function Markdown({ children }: { children: string }) {
+  return (
+    <div className="whitespace-normal space-y-2 overflow-x-auto [&_ol]:list-decimal [&_ol]:pl-4 [&_ul]:list-disc [&_ul]:pl-4 [&_strong]:font-semibold [&_h1]:text-sm [&_h1]:font-semibold [&_h2]:text-sm [&_h2]:font-semibold [&_h3]:text-sm [&_h3]:font-semibold [&_table]:w-full [&_table]:border-collapse [&_th]:border [&_th]:border-black/10 [&_th]:px-1.5 [&_th]:py-0.5 [&_th]:text-left [&_td]:border [&_td]:border-black/10 [&_td]:px-1.5 [&_td]:py-0.5">
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>{children}</ReactMarkdown>
     </div>
   );
 }

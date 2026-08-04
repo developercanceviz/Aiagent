@@ -8,6 +8,7 @@ export const tr = {
     name: "Canceviz AI",
     productName: "Canceviz AI Agent",
     poweredBy: "Powered by",
+    developedBy: "Paksoft tarafından geliştirilmiştir",
   },
   nav: {
     dashboard: "Dashboard",
