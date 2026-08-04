@@ -4,20 +4,35 @@ import type { InboundMessage } from "@/lib/channels/types";
 
 const GRAPH_VERSION = "v21.0";
 export const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`;
+/** Instagram-business-login tokens live on their own Graph host. */
+export const IG_GRAPH_BASE = `https://graph.instagram.com/${GRAPH_VERSION}`;
 
 /**
  * Verify a Meta webhook signature (X-Hub-Signature-256: sha256=<hex>) against
- * the raw body using META_APP_SECRET.
+ * the raw body. More than one signing secret is expected in production: the
+ * Instagram-login app signs with its own Instagram app secret while the
+ * WhatsApp app signs with its Meta app secret — META_APP_SECRET holds the
+ * primary and META_APP_SECRETS (comma-separated) any additional ones.
  */
+function metaAppSecrets(): string[] {
+  return [process.env.META_APP_SECRET, ...(process.env.META_APP_SECRETS ?? "").split(",")]
+    .map((s) => s?.trim())
+    .filter((s): s is string => Boolean(s));
+}
+
 export function verifyMetaSignature(raw: string, header: string | null): boolean {
-  const secret = process.env.META_APP_SECRET;
-  if (!secret || !header) return false;
-  const expected = "sha256=" + createHmac("sha256", secret).update(raw).digest("hex");
-  try {
-    return timingSafeEqual(Buffer.from(expected), Buffer.from(header));
-  } catch {
-    return false;
+  const secrets = metaAppSecrets();
+  if (secrets.length === 0 || !header) return false;
+  for (const secret of secrets) {
+    const expected =
+      "sha256=" + createHmac("sha256", secret).update(raw).digest("hex");
+    try {
+      if (timingSafeEqual(Buffer.from(expected), Buffer.from(header))) return true;
+    } catch {
+      // length mismatch — try the next secret
+    }
   }
+  return false;
 }
 
 /** GET verification handshake (hub.challenge) for Meta webhook subscription. */
@@ -47,7 +62,7 @@ export function normalizeMetaPayload(payload: unknown): Array<
       id?: string;
       messaging?: Array<{
         sender?: { id?: string };
-        message?: { text?: string };
+        message?: { text?: string; is_echo?: boolean };
       }>;
       changes?: Array<{
         value?: {
@@ -60,9 +75,11 @@ export function normalizeMetaPayload(payload: unknown): Array<
   };
 
   for (const entry of body.entry ?? []) {
-    // Messenger / Instagram DM
+    // Messenger / Instagram DM. Meta echoes the business's own outbound
+    // messages back on the webhook (is_echo) — skip them or the agent
+    // replies to itself in a loop.
     for (const m of entry.messaging ?? []) {
-      if (!m.message?.text || !m.sender?.id) continue;
+      if (!m.message?.text || !m.sender?.id || m.message.is_echo) continue;
       out.push({
         channelType: body.object === "instagram" ? "INSTAGRAM" : "MESSENGER",
         senderExtId: m.sender.id,

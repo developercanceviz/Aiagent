@@ -5,6 +5,7 @@ import { CheckCircle2, Info, Link2, RefreshCw, RotateCcw } from "lucide-react";
 import { useI18n } from "@/lib/i18n/provider";
 import { Badge } from "@/components/ui/badge";
 import { ChannelIcon, type ChannelKind } from "@/components/channel-icon";
+import { ChannelConnectForm } from "@/components/settings/channel-connect-form";
 
 const connected: { kind: ChannelKind; name: string; sub: string }[] = [
   { kind: "instagram", name: "Instagram DM", sub: "@canceviz_hurma · Can Ceviz Müşteri Destek Asistanı" },
@@ -76,6 +77,8 @@ export default function KanallarPage() {
           <p className="text-xs text-emerald-700/80">{tt.allConnectedBody}</p>
         </div>
       </div>
+
+      <ChannelConnectForm />
 
       <div className="flex items-start gap-2.5 rounded-2xl border border-border/60 bg-card px-4 py-3.5 text-xs text-muted-foreground shadow-card">
         <Info className="mt-0.5 size-4 shrink-0 text-sky-500" />

@@ -4,11 +4,17 @@ import { decryptSecret } from "@/lib/crypto/secrets";
 import type { ChannelType } from "@prisma/client";
 
 export interface ChannelCredentials {
-  /** Page / WhatsApp access token (Meta). */
+  /** Page / WhatsApp / Instagram access token (Meta). */
   accessToken?: string;
   phoneNumberId?: string;
   pageId?: string;
   igId?: string;
+  /**
+   * Which Graph host the token belongs to. Instagram-business-login tokens
+   * only work against graph.instagram.com; page/WhatsApp tokens use
+   * graph.facebook.com (the default).
+   */
+  apiBase?: "facebook" | "instagram";
 }
 
 /** Find a channel by its provider-side external id (page id / phone number id). */

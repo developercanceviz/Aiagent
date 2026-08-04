@@ -7,6 +7,7 @@ import type {
 import type { ChannelCredentials } from "@/lib/db/channel";
 import {
   GRAPH_BASE,
+  IG_GRAPH_BASE,
   normalizeMetaPayload,
   verifyMetaSignature,
 } from "@/lib/channels/meta/base";
@@ -39,7 +40,9 @@ abstract class MetaAdapter implements ChannelAdapter {
   protected async graphPost(path: string, body: unknown): Promise<void> {
     const token = this.creds.accessToken;
     if (!token) throw new Error(`${this.type}: missing access token`);
-    const res = await fetch(`${GRAPH_BASE}/${path}`, {
+    const base =
+      this.creds.apiBase === "instagram" ? IG_GRAPH_BASE : GRAPH_BASE;
+    const res = await fetch(`${base}/${path}`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,

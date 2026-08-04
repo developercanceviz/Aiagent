@@ -127,6 +127,20 @@ export const tr = {
       allConnectedBody:
         "WhatsApp, Instagram ve Messenger kanallarınız aktif. AI Agent'ınız tüm kanallardan gelen mesajları yanıtlayabilir.",
       info: "Kanal bağlama işlemi sırasında ilgili platformun (Meta Business Suite) yönetici hesabınıza giriş yapmanız istenecektir. Tüm bağlantılar güvenli OAuth protokolü ile kurulur.",
+      connectForm: {
+        title: "Kanal Bağla (Gelişmiş)",
+        subtitle:
+          "Meta geliştirici panelinden aldığınız kimlik bilgileriyle bir kanalı doğrudan bağlayın. Anahtarlar şifrelenerek saklanır.",
+        channel: "Kanal",
+        displayName: "Görünen Ad",
+        displayNamePlaceholder: "@canceviz_hurma",
+        externalId: "Kanal ID (IG hesap ID / telefon numarası ID / sayfa ID)",
+        accessToken: "Erişim Anahtarı (Access Token)",
+        phoneNumberId: "Telefon Numarası ID (yalnızca WhatsApp)",
+        submit: "Kanalı Bağla",
+        success: "Kanal bağlandı ✓",
+        error: "Bağlantı başarısız:",
+      },
     },
     webChatPage: {
       title: "Widget Ayarları",
