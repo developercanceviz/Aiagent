@@ -25,7 +25,15 @@ export async function GET(req: NextRequest) {
   const state = params.get("state");
 
   const session = await getSession();
-  if (!code || !state || state !== session.oauthState) {
+  if (!code) {
+    return NextResponse.json({ error: "Missing authorization code" }, { status: 400 });
+  }
+  // CSRF state is only present when the flow started at our /authorize route.
+  // ikas-initiated installs ("Uygulama Kur" in the admin panel) redirect
+  // straight here with just code+storeName — no state exists to check. The
+  // code exchange below is the authenticity proof in that flow: only ikas can
+  // mint a code our client_secret can redeem.
+  if (session.oauthState && state !== session.oauthState) {
     return NextResponse.json({ error: "Invalid OAuth state" }, { status: 400 });
   }
 
