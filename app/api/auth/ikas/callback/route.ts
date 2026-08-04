@@ -39,7 +39,25 @@ export async function GET(req: NextRequest) {
   }
 
   const redirectUri = `${env.deployUrl}/api/auth/ikas/callback`;
-  const token = await exchangeCodeForToken({ code, redirectUri });
+  const storeNameParam = params.get("storeName");
+  const storeSlug =
+    storeNameParam && /^[a-z0-9-]+$/i.test(storeNameParam) ? storeNameParam : null;
+
+  let token;
+  try {
+    token = await exchangeCodeForToken({ code, redirectUri, storeName: storeSlug });
+  } catch (err) {
+    // First live exercise of this flow — surface the reason instead of a
+    // blank 500. The message carries endpoint + status, never secrets.
+    console.error("[ikas:callback] code exchange failed", err);
+    return NextResponse.json(
+      {
+        error: "ikas code exchange failed",
+        detail: err instanceof Error ? err.message : "unknown",
+      },
+      { status: 502 }
+    );
+  }
 
   // ikas does NOT identify the store in callback params (only code/state/
   // signature) — the token itself is the source of truth. Ask the API who it

@@ -41,22 +41,36 @@ export interface IkasTokenResponse {
 export async function exchangeCodeForToken(args: {
   code: string;
   redirectUri: string;
+  /** Store slug, when known — its own token endpoint is the one proven live. */
+  storeName?: string | null;
 }): Promise<IkasTokenResponse> {
-  const res = await fetch(`${IKAS_AUTH_BASE}/token`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "authorization_code",
-      client_id: env.ikasClientId ?? "",
-      client_secret: env.ikasClientSecret ?? "",
-      redirect_uri: args.redirectUri,
-      code: args.code,
-    }),
+  const body = new URLSearchParams({
+    grant_type: "authorization_code",
+    client_id: env.ikasClientId ?? "",
+    client_secret: env.ikasClientSecret ?? "",
+    redirect_uri: args.redirectUri,
+    code: args.code,
   });
-  if (!res.ok) {
-    throw new Error(`ikas token exchange failed: ${res.status} ${await res.text()}`);
+  // Same reality as clientCredentialsToken: the store-domain endpoint is the
+  // one verified against the live platform; the central v1 host is a fallback.
+  const endpoints = [
+    ...(args.storeName
+      ? [`https://${args.storeName}.myikas.com/api/admin/oauth/token`]
+      : []),
+    `${IKAS_AUTH_BASE}/token`,
+  ];
+
+  const failures: string[] = [];
+  for (const url of endpoints) {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body,
+    });
+    if (res.ok) return (await res.json()) as IkasTokenResponse;
+    failures.push(`${url} → ${res.status} ${(await res.text()).slice(0, 200)}`);
   }
-  return (await res.json()) as IkasTokenResponse;
+  throw new Error(`ikas code exchange failed: ${failures.join(" | ")}`);
 }
 
 /**
