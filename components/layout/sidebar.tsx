@@ -7,6 +7,7 @@ import { ChevronLeft, ChevronRight, Sparkles, ArrowRight } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n/provider";
+import { useAppBridge } from "@/components/ikas/app-bridge-provider";
 import { navItems } from "@/lib/config/nav";
 import { demoStore } from "@/lib/config/brand";
 import { BrandLogo } from "@/components/layout/brand-logo";
@@ -18,9 +19,41 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
+/**
+ * Inside the ikas admin iframe, App-Router client navigation does not take
+ * effect — the click registers but the view never changes, and only a manual
+ * refresh lands on the target page. Full document navigation always works
+ * there, so embedded mode uses plain anchors. Standalone keeps SPA routing.
+ */
+function NavAnchor({
+  href,
+  embedded,
+  className,
+  children,
+}: {
+  href: string;
+  embedded: boolean;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  if (embedded) {
+    return (
+      <a href={href} className={className}>
+        {children}
+      </a>
+    );
+  }
+  return (
+    <Link href={href} className={className}>
+      {children}
+    </Link>
+  );
+}
+
 export function Sidebar() {
   const pathname = usePathname();
   const { t } = useI18n();
+  const { embedded } = useAppBridge();
   const [collapsed, setCollapsed] = React.useState(false);
 
   const isActive = (href: string) =>
@@ -62,12 +95,13 @@ export function Sidebar() {
         {collapsed ? (
           <Tooltip>
             <TooltipTrigger asChild>
-              <Link
+              <NavAnchor
                 href="/asistan"
+                embedded={embedded}
                 className="flex size-11 items-center justify-center rounded-xl bg-ink text-ink-foreground transition-transform hover:scale-105"
               >
                 <Sparkles className="size-5 text-primary" />
-              </Link>
+              </NavAnchor>
             </TooltipTrigger>
             <TooltipContent side="right">{t.assistant.title}</TooltipContent>
           </Tooltip>
@@ -77,13 +111,14 @@ export function Sidebar() {
               {t.assistant.label}
             </p>
             <p className="mt-1 text-sm font-semibold">{t.assistant.title}</p>
-            <Link
+            <NavAnchor
               href="/asistan"
+              embedded={embedded}
               className="mt-3 flex h-9 items-center justify-center gap-1.5 rounded-xl bg-primary text-sm font-medium text-primary-foreground transition-colors hover:bg-brand-600"
             >
               {t.assistant.cta}
               <ArrowRight className="size-4" />
-            </Link>
+            </NavAnchor>
           </div>
         )}
       </div>
@@ -99,9 +134,10 @@ export function Sidebar() {
           const active = isActive(item.href);
           const Icon = item.icon;
           const link = (
-            <Link
+            <NavAnchor
               key={item.href}
               href={item.href}
+              embedded={embedded}
               className={cn(
                 "flex items-center gap-3 rounded-xl text-sm font-medium transition-colors",
                 collapsed ? "size-11 justify-center" : "h-10 px-3",
@@ -112,7 +148,7 @@ export function Sidebar() {
             >
               <Icon className="size-[18px] shrink-0" />
               {!collapsed && <span>{item.label(t)}</span>}
-            </Link>
+            </NavAnchor>
           );
           return collapsed ? (
             <Tooltip key={item.href}>
