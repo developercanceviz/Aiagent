@@ -114,6 +114,7 @@ export const tr = {
       active: "AKTİF",
       aiActive: "AI Aktif",
       passive: "Pasif",
+      notConnected: "Bağlı değil",
     },
     channelsPage: {
       title: "Kanallar",
@@ -187,6 +188,15 @@ export const tr = {
     formType: "Tür",
     save: "Kaydet",
     cancel: "İptal",
+    upload: {
+      cta: "Dosya Yükle",
+      title: "Word / metin dosyası yükle",
+      hint: ".docx, .txt veya .md — dosya bölümlere ayrılıp AI'ın bilgi bankasına eklenir.",
+      uploading: "Yükleniyor ve işleniyor...",
+      success: "eklendi",
+      chunks: "bölüm",
+      error: "Yükleme başarısız:",
+    },
   },
   common: {
     save: "Kaydet",

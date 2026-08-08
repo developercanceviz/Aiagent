@@ -1,45 +1,20 @@
-"use client";
-
-import * as React from "react";
 import { ArrowRight, Bot, MessageSquare, Sparkles } from "lucide-react";
 
 import { formatNumber } from "@/lib/utils";
-import { useI18n } from "@/lib/i18n/provider";
+import { getDictionary } from "@/lib/i18n";
 import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
-import { ChannelIcon, type ChannelKind } from "@/components/channel-icon";
+import { ChannelAiToggles } from "@/components/settings/channel-ai-toggles";
 import { connectedAgents } from "@/lib/mock/dashboard";
 import { demoStore } from "@/lib/config/brand";
-import { setChannelAiEnabled } from "@/lib/actions/channel";
+import { getChannelSettings } from "@/lib/actions/channel";
 
-const initialChannels: {
-  id: string;
-  kind: ChannelKind;
-  name: string;
-  sub: string;
-  enabled: boolean;
-}[] = [
-  { id: "mock-wa", kind: "whatsapp", name: "WhatsApp", sub: "Canceviz Hurma", enabled: false },
-  { id: "mock-ms", kind: "messenger", name: "Messenger", sub: "Canceviz hurma", enabled: true },
-  { id: "mock-wc", kind: "webchat", name: "Web Chat", sub: "Canlı Destek", enabled: false },
-  { id: "mock-ig", kind: "instagram", name: "Instagram", sub: "Canceviz Hurma", enabled: false },
-];
+// Channel AI state is live data — never serve it from the build cache.
+export const dynamic = "force-dynamic";
 
-export default function AiAgentSettingsPage() {
-  const { t } = useI18n();
+export default async function AiAgentSettingsPage() {
+  const t = getDictionary("tr");
   const tt = t.settings.aiAgentPage;
-  const [channels, setChannels] = React.useState(initialChannels);
-  const [, startTransition] = React.useTransition();
-
-  const toggle = (i: number) =>
-    setChannels((prev) =>
-      prev.map((c, idx) => {
-        if (idx !== i) return c;
-        const enabled = !c.enabled;
-        startTransition(() => setChannelAiEnabled(c.id, enabled).catch(() => {}));
-        return { ...c, enabled };
-      })
-    );
+  const channels = await getChannelSettings();
 
   return (
     <div className="space-y-3">
@@ -98,7 +73,7 @@ export default function AiAgentSettingsPage() {
         ))}
       </div>
 
-      {/* Channel AI control */}
+      {/* Channel AI control — real Channel.aiEnabled state */}
       <div className="rounded-2xl border border-border/60 bg-card shadow-card">
         <div className="flex items-center gap-2 border-b border-border/60 px-5 py-3.5">
           <p className="text-xs font-semibold tracking-wide text-muted-foreground">
@@ -108,21 +83,7 @@ export default function AiAgentSettingsPage() {
             {channels.length}
           </span>
         </div>
-        <div className="divide-y divide-border/60">
-          {channels.map((c, i) => (
-            <div key={c.name} className="flex items-center gap-3 px-5 py-4">
-              <ChannelIcon kind={c.kind} size="sm" />
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium">{c.name}</p>
-                <p className="text-xs text-muted-foreground">{c.sub}</p>
-              </div>
-              <span className="text-xs font-medium text-muted-foreground">
-                {c.enabled ? tt.aiActive : tt.passive}
-              </span>
-              <Switch checked={c.enabled} onCheckedChange={() => toggle(i)} />
-            </div>
-          ))}
-        </div>
+        <ChannelAiToggles channels={channels} />
       </div>
     </div>
   );

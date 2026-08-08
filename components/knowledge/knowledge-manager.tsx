@@ -1,9 +1,11 @@
 "use client";
 
 import * as React from "react";
-import { BookOpen, Loader2, Plus, Search, Trash2, X } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { BookOpen, Loader2, Plus, Search, Trash2, Upload, X } from "lucide-react";
 
 import { useI18n } from "@/lib/i18n/provider";
+import { ikasFetch } from "@/lib/ikas/fetch";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -18,7 +20,11 @@ const TYPES = ["FAQ", "POLICY", "PRODUCT", "DOCUMENT"] as const;
 export function KnowledgeManager({ initial }: { initial: KnowledgeRow[] }) {
   const { t } = useI18n();
   const k = t.knowledge;
+  const router = useRouter();
   const [items, setItems] = React.useState(initial);
+  // Uploads add rows server-side; router.refresh() re-renders the page with a
+  // new `initial`, which must win over the local optimistic copy.
+  React.useEffect(() => setItems(initial), [initial]);
   const [query, setQuery] = React.useState("");
   const [open, setOpen] = React.useState(false);
   const [pending, startTransition] = React.useTransition();
@@ -26,6 +32,47 @@ export function KnowledgeManager({ initial }: { initial: KnowledgeRow[] }) {
   const [type, setType] = React.useState<(typeof TYPES)[number]>("FAQ");
   const [title, setTitle] = React.useState("");
   const [content, setContent] = React.useState("");
+
+  const fileRef = React.useRef<HTMLInputElement>(null);
+  const [upl, setUpl] = React.useState<
+    | { kind: "idle" }
+    | { kind: "busy"; name: string }
+    | { kind: "done"; name: string; chunks: number }
+    | { kind: "error"; detail: string }
+  >({ kind: "idle" });
+
+  /**
+   * Uploads run one file at a time: each does its own embedding batch server
+   * side, and firing them together would blow past the function's time budget.
+   */
+  const upload = async (files: FileList | null) => {
+    if (!files?.length) return;
+    let total = 0;
+    let lastName = "";
+    for (const file of Array.from(files)) {
+      setUpl({ kind: "busy", name: file.name });
+      try {
+        const body = new FormData();
+        body.append("file", file);
+        const res = await ikasFetch("/api/knowledge/upload", { method: "POST", body });
+        const json = (await res.json()) as { error?: string; chunks?: number };
+        if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
+        total += json.chunks ?? 0;
+        lastName = file.name;
+      } catch (err) {
+        setUpl({
+          kind: "error",
+          detail: err instanceof Error ? err.message : "unknown",
+        });
+        if (fileRef.current) fileRef.current.value = "";
+        return;
+      }
+    }
+    setUpl({ kind: "done", name: lastName, chunks: total });
+    if (fileRef.current) fileRef.current.value = "";
+    // Server-rendered list is now stale — pull the stored chunks in.
+    router.refresh();
+  };
 
   const filtered = items.filter(
     (i) =>
@@ -68,11 +115,50 @@ export function KnowledgeManager({ initial }: { initial: KnowledgeRow[] }) {
             <p className="max-w-xl text-sm text-muted-foreground">{k.subtitle}</p>
           </div>
         </div>
-        <Button onClick={() => setOpen((o) => !o)}>
-          {open ? <X className="size-4" /> : <Plus className="size-4" />}
-          {open ? k.cancel : k.add}
-        </Button>
+        <div className="flex items-center gap-2">
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".docx,.txt,.md"
+            multiple
+            hidden
+            onChange={(e) => upload(e.target.files)}
+          />
+          <Button
+            variant="outline"
+            onClick={() => fileRef.current?.click()}
+            disabled={upl.kind === "busy"}
+            title={k.upload.hint}
+          >
+            {upl.kind === "busy" ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Upload className="size-4" />
+            )}
+            {k.upload.cta}
+          </Button>
+          <Button onClick={() => setOpen((o) => !o)}>
+            {open ? <X className="size-4" /> : <Plus className="size-4" />}
+            {open ? k.cancel : k.add}
+          </Button>
+        </div>
       </div>
+
+      {upl.kind !== "idle" && (
+        <div
+          className={
+            "rounded-xl border px-4 py-2.5 text-sm " +
+            (upl.kind === "error"
+              ? "border-red-200 bg-red-50 text-red-800"
+              : "border-border/60 bg-card text-muted-foreground")
+          }
+        >
+          {upl.kind === "busy" && `${k.upload.uploading} ${upl.name}`}
+          {upl.kind === "done" &&
+            `${upl.name} — ${upl.chunks} ${k.upload.chunks} ${k.upload.success} ✓`}
+          {upl.kind === "error" && `${k.upload.error} ${upl.detail}`}
+        </div>
+      )}
 
       {open && (
         <div className="space-y-3 rounded-2xl border border-border/60 bg-card p-4 shadow-card">
