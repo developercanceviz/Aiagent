@@ -14,6 +14,7 @@ export const tr = {
     dashboard: "Dashboard",
     crm: "CRM",
     messages: "Mesajlar",
+    knowledge: "Bilgi Bankası",
     announcements: "Duyurular",
     settings: "Ayarlar",
     menu: "MENÜ",
