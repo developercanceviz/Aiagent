@@ -69,5 +69,16 @@ export async function GET(req: Request) {
       privateClientId: process.env.IKAS_PRIVATE_CLIENT_ID?.slice(0, 8) ?? null,
       privateSecretSet: Boolean(process.env.IKAS_PRIVATE_CLIENT_SECRET),
     },
+    // Meta webhooks are signature-verified against every configured app
+    // secret (Instagram and WhatsApp are separate apps). Counting them is how
+    // "did my env change land?" gets answered without exposing a value.
+    meta: {
+      verifyTokenSet: Boolean(process.env.META_VERIFY_TOKEN),
+      appSecretSet: Boolean(process.env.META_APP_SECRET),
+      extraAppSecrets: (process.env.META_APP_SECRETS ?? "")
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean).length,
+    },
   });
 }
