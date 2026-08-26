@@ -94,10 +94,10 @@
       return r.ok ? r.json() : null;
     })
     .then(function (cfg) {
-      if (cfg && cfg.active === false) return;
+      // Fail closed: only render once the config endpoint confirms the widget
+      // is active, so a muted store can't resurface on a fetch hiccup.
+      if (!cfg || cfg.active === false) return;
       build(cfg);
     })
-    .catch(function () {
-      build(null);
-    });
+    .catch(function () {});
 })();

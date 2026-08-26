@@ -2,16 +2,20 @@ import { cn } from "@/lib/utils";
 import { brandConfig } from "@/lib/config/brand";
 
 /**
- * Configurable brand lockup. Renders /logo.png (drop a new file in /public to
+ * Configurable brand lockup. Renders /logo.jpeg (drop a new file in /public to
  * rebrand); the wordmark from brandConfig stays as the accessible name.
  */
 export function BrandLogo({ className }: { className?: string }) {
   return (
     // eslint-disable-next-line @next/next/no-img-element -- static local asset
     <img
-      src="/logo.png"
+      src="/logo.jpeg"
       alt={brandConfig.name}
-      className={cn("h-8 w-auto select-none", className)}
+      // The asset is a square export with the wordmark as a centered band and
+      // wide empty margins; cropping to that band keeps the mark readable at
+      // nav size instead of shrinking the whole square down to 32px.
+      style={{ aspectRatio: "4.5 / 1" }}
+      className={cn("h-8 w-auto select-none object-cover", className)}
     />
   );
 }
