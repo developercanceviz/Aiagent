@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 
+import { AppFooter } from "@/components/layout/app-footer";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
 import { useAppBridge } from "@/components/ikas/app-bridge-provider";
@@ -23,6 +24,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
           <div className="h-full rounded-2xl">{children}</div>
         </main>
       </div>
+      <AppFooter />
     </div>
   );
 }

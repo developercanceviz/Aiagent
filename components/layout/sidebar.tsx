@@ -11,7 +11,6 @@ import { useAppBridge } from "@/components/ikas/app-bridge-provider";
 import { navItems } from "@/lib/config/nav";
 import { demoStore } from "@/lib/config/brand";
 import { BrandLogo } from "@/components/layout/brand-logo";
-import { DevCredit } from "@/components/layout/dev-credit";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   Tooltip,
@@ -62,7 +61,7 @@ export function Sidebar() {
   return (
     <aside
       className={cn(
-        "relative m-3 flex shrink-0 flex-col rounded-2xl border border-border/60 bg-card shadow-card transition-[width] duration-200",
+        "relative m-3 flex min-h-0 shrink-0 flex-col rounded-2xl border border-border/60 bg-card shadow-card transition-[width] duration-200",
         collapsed ? "w-[72px] items-center" : "w-64"
       )}
     >
@@ -124,7 +123,14 @@ export function Sidebar() {
       </div>
 
       {/* Nav */}
-      <nav className={cn("flex flex-1 flex-col gap-1 px-3 pt-5", collapsed && "px-2 items-center")}>
+      <nav
+        // min-h-0 + scroll keeps the store block pinned at the bottom instead
+        // of being pushed off the viewport on short screens.
+        className={cn(
+          "flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-3 pt-5",
+          collapsed && "items-center px-2"
+        )}
+      >
         {!collapsed && (
           <p className="px-3 pb-1 text-[10px] font-medium tracking-widest text-muted-foreground">
             {t.nav.menu}
@@ -183,11 +189,6 @@ export function Sidebar() {
             </div>
           )}
         </div>
-        {!collapsed && (
-          <div className="flex justify-center pt-2.5">
-            <DevCredit />
-          </div>
-        )}
       </div>
     </aside>
   );
