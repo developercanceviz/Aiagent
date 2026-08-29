@@ -148,11 +148,22 @@ export function TestChat({
       </div>
 
       {error && (
-        <div className="flex items-start gap-2 border-b border-red-200 bg-red-50 px-4 py-2 text-xs text-red-800">
+        <div className="flex flex-wrap items-start gap-2 border-b border-red-200 bg-red-50 px-4 py-2 text-xs text-red-800">
           <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
           <span>
             {error === "no-session" ? tt.noSession : `${tt.error} ${error}`}
           </span>
+          {error === "no-session" && (
+            // The dashboard has no login of its own yet: the store session is
+            // bound by the ikas connect round-trip, so give the tester the
+            // one-click way back instead of a dead end.
+            <a
+              href="/api/auth/ikas/connect?returnTo=/mesajlar"
+              className="font-medium underline underline-offset-2"
+            >
+              {t.crm.reconnect}
+            </a>
+          )}
         </div>
       )}
 

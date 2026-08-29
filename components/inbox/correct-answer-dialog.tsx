@@ -112,7 +112,15 @@ export function CorrectAnswerDialog({
 
           {error && (
             <p className="text-xs text-red-700">
-              {error === "no-session" ? t.crm.errors["no-session"] : tc.error}
+              {error === "no-session" ? t.crm.errors["no-session"] : tc.error}{" "}
+              {error === "no-session" && (
+                <a
+                  href="/api/auth/ikas/connect?returnTo=/mesajlar"
+                  className="font-medium underline underline-offset-2"
+                >
+                  {t.crm.reconnect}
+                </a>
+              )}
             </p>
           )}
         </div>
