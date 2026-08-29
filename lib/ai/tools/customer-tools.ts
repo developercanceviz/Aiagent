@@ -10,7 +10,13 @@ import { formatTRY } from "@/lib/utils";
 export interface CustomerToolContext {
   merchantId: string;
   conversationId: string;
-  adapter: CommerceAdapter;
+  /**
+   * null when the store connection is momentarily unavailable (expired ikas
+   * token, provider outage). The commerce tools are then simply not offered,
+   * so the agent still answers from the knowledge base instead of the whole
+   * turn failing.
+   */
+  adapter: CommerceAdapter | null;
 }
 
 /**
@@ -20,6 +26,80 @@ export interface CustomerToolContext {
  * own tables.
  */
 export function buildCustomerTools(ctx: CustomerToolContext) {
+  // Commerce tools need a live store connection. Without one the agent keeps
+  // its knowledge-base, escalation and lead tools and answers what it can,
+  // rather than the whole turn dying on an ikas hiccup.
+  const commerceTools = ctx.adapter
+    ? buildCommerceTools({ ...ctx, adapter: ctx.adapter })
+    : {};
+
+  return {
+    ...commerceTools,
+    searchKnowledge: tool({
+      description: "SSS, politikalar ve ürün bilgisi içeren bilgi bankasında arama yapar.",
+      parameters: z.object({ query: z.string().min(1) }),
+      execute: async ({ query }) => {
+        const chunks = await retrieve(ctx.merchantId, query, { limit: 4 });
+        return chunks.map((c) => ({ title: c.title, content: c.content }));
+      },
+    }),
+
+    escalateToHuman: tool({
+      description:
+        "Konuşmayı bir müşteri temsilcisine aktarır. Yanıtlayamadığında veya müşteri insan istediğinde kullan.",
+      parameters: z.object({ reason: z.string().min(1) }),
+      execute: async ({ reason }) => {
+        if (isConfigured.database()) {
+          await prisma.conversation.update({
+            where: { id: ctx.conversationId },
+            data: { status: "NEEDS_HUMAN", handledBy: "HUMAN" },
+          });
+        }
+        return { escalated: true, reason };
+      },
+    }),
+
+    captureLead: tool({
+      description:
+        "Müşteri iletişim/ilgi bilgisi verdiğinde CRM'e yeni lead ekler. " +
+        "Müşteri iade veya değişim talebinden söz ederse category='iade' gönder.",
+      parameters: z.object({
+        name: z.string().min(1),
+        contact: z.string().nullable().describe("Telefon/e-posta; yoksa null"),
+        intent: z.string().nullable().describe("İlgi/istek özeti; yoksa null"),
+        category: z
+          .enum(["iade", "genel"])
+          .nullable()
+          .describe("İade/değişim talebi ise 'iade', aksi halde 'genel'"),
+      }),
+      execute: async ({ name, contact, intent, category }) => {
+        // The model only classifies; the column mapping is decided here so a
+        // hallucinated stage name can never reach the database.
+        const stage = category === "iade" ? "IADE_TALEP" : "YENI";
+        if (isConfigured.database()) {
+          await prisma.lead.upsert({
+            where: { conversationId: ctx.conversationId },
+            update: { name, contact, note: intent, stage },
+            create: {
+              merchantId: ctx.merchantId,
+              conversationId: ctx.conversationId,
+              name,
+              contact,
+              note: intent,
+              stage,
+            },
+          });
+        }
+        return { captured: true };
+      },
+    }),
+  };
+}
+
+/** Read-only store data — only offered when the adapter could be built. */
+function buildCommerceTools(
+  ctx: CustomerToolContext & { adapter: CommerceAdapter }
+) {
   return {
     searchProducts: tool({
       description: "Mağaza ürünlerinde arama yapar; isim, fiyat ve stok döndürür.",
@@ -73,56 +153,6 @@ export function buildCustomerTools(ctx: CustomerToolContext) {
           total: formatTRY(order.total.amount),
           createdAt: order.createdAt,
         };
-      },
-    }),
-
-    searchKnowledge: tool({
-      description: "SSS, politikalar ve ürün bilgisi içeren bilgi bankasında arama yapar.",
-      parameters: z.object({ query: z.string().min(1) }),
-      execute: async ({ query }) => {
-        const chunks = await retrieve(ctx.merchantId, query, { limit: 4 });
-        return chunks.map((c) => ({ title: c.title, content: c.content }));
-      },
-    }),
-
-    escalateToHuman: tool({
-      description:
-        "Konuşmayı bir müşteri temsilcisine aktarır. Yanıtlayamadığında veya müşteri insan istediğinde kullan.",
-      parameters: z.object({ reason: z.string().min(1) }),
-      execute: async ({ reason }) => {
-        if (isConfigured.database()) {
-          await prisma.conversation.update({
-            where: { id: ctx.conversationId },
-            data: { status: "NEEDS_HUMAN", handledBy: "HUMAN" },
-          });
-        }
-        return { escalated: true, reason };
-      },
-    }),
-
-    captureLead: tool({
-      description: "Müşteri iletişim/ilgi bilgisi verdiğinde CRM'e yeni lead ekler.",
-      parameters: z.object({
-        name: z.string().min(1),
-        contact: z.string().nullable().describe("Telefon/e-posta; yoksa null"),
-        intent: z.string().nullable().describe("İlgi/istek özeti; yoksa null"),
-      }),
-      execute: async ({ name, contact, intent }) => {
-        if (isConfigured.database()) {
-          await prisma.lead.upsert({
-            where: { conversationId: ctx.conversationId },
-            update: { name, contact, note: intent },
-            create: {
-              merchantId: ctx.merchantId,
-              conversationId: ctx.conversationId,
-              name,
-              contact,
-              note: intent,
-              stage: "YENI",
-            },
-          });
-        }
-        return { captured: true };
       },
     }),
   };

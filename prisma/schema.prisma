@@ -68,7 +68,9 @@ enum MsgRole {
 
 enum LeadStage {
   YENI
-  GORUSMEDE
+  // Renamed from GORUSMEDE (2026-08-29): this column collects return requests
+  // the agent detects. Postgres value renamed in place, so data is unaffected.
+  IADE_TALEP
   TAKIP
   OLUMLU
   OLUMSUZ
@@ -79,6 +81,8 @@ enum KbType {
   DOCUMENT
   PRODUCT
   POLICY
+  /** A reviewed fix for a wrong AI answer — outranks every other source. */
+  CORRECTION
 }
 
 // ──────────────────────────── Models ────────────────────────────
@@ -165,6 +169,8 @@ model Conversation {
   unreadCount   Int         @default(0)
   starred       Boolean     @default(false)
   archived      Boolean     @default(false)
+  /** Merchant's own test conversation — kept out of the real inbox and stats. */
+  isTest        Boolean     @default(false)
   createdAt     DateTime    @default(now())
 
   messages Message[]
@@ -215,6 +221,8 @@ model KnowledgeItem {
   title      String
   content    String
   sourceRef  String? // ikas product id, file name, etc.
+  /** CORRECTION only: the wrong answer this entry replaces (audit + UI). */
+  badAnswer  String?
   embedding  Unsupported("vector(1536)")?
   updatedAt  DateTime                     @updatedAt
   merchant   Merchant                     @relation(fields: [merchantId], references: [id], onDelete: Cascade)

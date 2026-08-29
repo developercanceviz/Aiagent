@@ -4,6 +4,7 @@ import { getModel } from "@/lib/ai/provider";
 import { buildCustomerPrompt } from "@/lib/ai/prompt";
 import { buildCustomerTools } from "@/lib/ai/tools/customer-tools";
 import { retrieve } from "@/lib/ai/rag";
+import { applyIntentRules } from "@/lib/ai/intents";
 import { getMerchant, getMerchantAdapter } from "@/lib/db/merchant";
 import {
   appendMessage,
@@ -32,16 +33,40 @@ export async function prepareAgentRun(args: {
   conversationId: string;
   latestUserText: string;
 }) {
-  const [merchant, adapter, history, knowledge] = await Promise.all([
+  const [merchant, adapter, history, knowledge, corrections] = await Promise.all([
     getMerchant(args.merchantId),
-    getMerchantAdapter(args.merchantId),
+    // A broken store connection must not silence the agent — see
+    // buildCustomerTools: it just runs without the commerce tools.
+    getMerchantAdapter(args.merchantId).catch((err) => {
+      console.error("[agent] commerce adapter unavailable", err);
+      return null;
+    }),
     getConversationHistory(args.conversationId),
-    retrieve(args.merchantId, args.latestUserText, { limit: 4 }).catch(() => []),
+    retrieve(args.merchantId, args.latestUserText, {
+      limit: 4,
+      // Corrections are fetched separately below so they can be injected with
+      // priority instead of competing with documents for the same 4 slots.
+      excludeTypes: ["CORRECTION"],
+    }).catch(() => []),
+    retrieve(args.merchantId, args.latestUserText, {
+      limit: 3,
+      types: ["CORRECTION"],
+      // A correction only applies to the question it was written for; a loose
+      // match would override good answers with an unrelated fix.
+      minScore: 0.78,
+    }).catch(() => []),
+    // Runs even if the model never calls captureLead (see lib/ai/intents.ts).
+    applyIntentRules({
+      merchantId: args.merchantId,
+      conversationId: args.conversationId,
+      text: args.latestUserText,
+    }).catch(() => null),
   ]);
 
   const system = buildCustomerPrompt({
     storeName: merchant?.storeName ?? "Mağaza",
     knowledge: knowledge.map((k) => `${k.title}: ${k.content}`),
+    corrections: corrections.map((c) => ({ question: c.title, answer: c.content })),
   });
 
   const messages: CoreMessage[] = history.map((m) => ({

@@ -54,7 +54,7 @@ import {
 
 const stageDot: Record<LeadStageKey, string> = {
   YENI: "bg-amber-400",
-  GORUSMEDE: "bg-orange-400",
+  IADE_TALEP: "bg-orange-400",
   TAKIP: "bg-sky-400",
   OLUMLU: "bg-emerald-400",
   OLUMSUZ: "bg-red-400",

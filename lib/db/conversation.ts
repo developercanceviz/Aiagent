@@ -63,7 +63,9 @@ export async function getConversationHistory(conversationId: string, limit = 20)
 
 export async function listConversations(merchantId: string) {
   return prisma.conversation.findMany({
-    where: { merchantId, archived: false },
+    // Test conversations live behind the Mesajlar → Test tab; they must not
+    // pollute the real inbox or the counts derived from it.
+    where: { merchantId, archived: false, isTest: false },
     orderBy: { lastMessageAt: "desc" },
     take: 100,
   });

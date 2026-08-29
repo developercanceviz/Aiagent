@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Archive, Bot, Hand, MessageCircle, Search, Send, Star } from "lucide-react";
+import { Archive, Bot, FlaskConical, Hand, MessageCircle, Search, Send, Star } from "lucide-react";
 
 import { cn, relativeTimeTR } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n/provider";
@@ -10,6 +10,13 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ChannelIcon, type ChannelKind } from "@/components/channel-icon";
 import { useConversationsRealtime } from "@/lib/realtime/use-conversations";
+import { MessageThread } from "@/components/inbox/message-thread";
+import { TestChat } from "@/components/inbox/test-chat";
+import {
+  CorrectAnswerDialog,
+  type CorrectionTarget,
+} from "@/components/inbox/correct-answer-dialog";
+import { getCorrectedMessageIds } from "@/lib/actions/knowledge";
 import {
   getInboxConversations,
   getThread,
@@ -22,7 +29,18 @@ import {
 
 export function InboxView({ initial }: { initial: InboxConversationDTO[] }) {
   const { t } = useI18n();
-  const [filter, setFilter] = React.useState<"all" | "instagram" | "whatsapp" | "live">("all");
+  const [filter, setFilter] = React.useState<
+    "all" | "instagram" | "whatsapp" | "live" | "test"
+  >("all");
+  const [correcting, setCorrecting] = React.useState<CorrectionTarget | null>(null);
+  // AI messages that already have a correction, so they aren't corrected twice.
+  const [correctedIds, setCorrectedIds] = React.useState<Set<string>>(new Set());
+
+  React.useEffect(() => {
+    getCorrectedMessageIds()
+      .then((ids) => setCorrectedIds(new Set(ids)))
+      .catch(() => {});
+  }, []);
   const [conversations, setConversations] = React.useState(initial);
   const [activeId, setActiveId] = React.useState<string | null>(initial[0]?.id ?? null);
   const [thread, setThread] = React.useState<InboxMessageDTO[]>([]);
@@ -50,9 +68,14 @@ export function InboxView({ initial }: { initial: InboxConversationDTO[] }) {
     { key: "instagram" as const, label: t.messages.filters.instagram },
     { key: "whatsapp" as const, label: t.messages.filters.whatsapp },
     { key: "live" as const, label: t.messages.filters.live },
+    { key: "test" as const, label: t.messages.test.tab, icon: FlaskConical },
   ];
   const visible = conversations.filter((c) =>
-    filter === "all" ? true : filter === "live" ? c.handledBy === "HUMAN" : c.channel === filter
+    filter === "all" || filter === "test"
+      ? true
+      : filter === "live"
+        ? c.handledBy === "HUMAN"
+        : c.channel === filter
   );
 
   const send = () => {
@@ -86,16 +109,20 @@ export function InboxView({ initial }: { initial: InboxConversationDTO[] }) {
             <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input placeholder={t.messages.searchPlaceholder} className="bg-muted pl-9" />
           </div>
-          <div className="flex items-center gap-1">
+          {/* Wraps: five chips don't fit the 320px column on one line. */}
+          <div className="flex flex-wrap items-center gap-1">
             {filters.map((f) => (
               <button
                 key={f.key}
                 onClick={() => setFilter(f.key)}
                 className={cn(
-                  "rounded-lg px-2.5 py-1 text-xs font-medium transition-colors",
-                  filter === f.key ? "bg-ink text-ink-foreground" : "text-muted-foreground hover:text-foreground"
+                  "flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium transition-colors",
+                  filter === f.key
+                    ? "bg-ink text-ink-foreground"
+                    : "text-muted-foreground hover:text-foreground"
                 )}
               >
+                {"icon" in f && f.icon && <f.icon className="size-3" />}
                 {f.label}
               </button>
             ))}
@@ -111,7 +138,18 @@ export function InboxView({ initial }: { initial: InboxConversationDTO[] }) {
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto">
-          {visible.map((c) => (
+          {filter === "test" && (
+            <div className="m-3 rounded-xl border border-border/60 bg-muted/40 p-3">
+              <p className="flex items-center gap-1.5 text-xs font-medium">
+                <FlaskConical className="size-3.5" /> {t.messages.test.title}
+              </p>
+              <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                {t.messages.test.subtitle}
+              </p>
+            </div>
+          )}
+          {filter !== "test" &&
+            visible.map((c) => (
             <button
               key={c.id}
               onClick={() => setActiveId(c.id)}
@@ -145,14 +183,16 @@ export function InboxView({ initial }: { initial: InboxConversationDTO[] }) {
                     {c.unread}
                   </span>
                 )}
-              </div>
-            </button>
-          ))}
+                </div>
+              </button>
+            ))}
         </div>
       </div>
 
       {/* Thread */}
-      {active ? (
+      {filter === "test" ? (
+        <TestChat correctedIds={correctedIds} onCorrect={setCorrecting} />
+      ) : active ? (
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
             <div className="flex items-center gap-3">
@@ -188,32 +228,12 @@ export function InboxView({ initial }: { initial: InboxConversationDTO[] }) {
             </button>
           </div>
 
-          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4">
-            {thread.map((m) => (
-              <div
-                key={m.id}
-                className={cn("flex", m.role === "CUSTOMER" ? "justify-start" : "justify-end")}
-              >
-                <div
-                  className={cn(
-                    "max-w-[70%] whitespace-pre-wrap rounded-2xl px-3.5 py-2 text-sm",
-                    m.role === "CUSTOMER"
-                      ? "bg-muted text-foreground"
-                      : m.role === "AI"
-                        ? "bg-sky-50 text-foreground"
-                        : "bg-primary text-primary-foreground"
-                  )}
-                >
-                  {m.role === "AI" && (
-                    <span className="mb-0.5 flex items-center gap-1 text-[10px] text-sky-600">
-                      <Bot className="size-3" /> AI
-                    </span>
-                  )}
-                  {m.content}
-                </div>
-              </div>
-            ))}
-          </div>
+          <MessageThread
+            messages={thread}
+            conversationId={active.id}
+            correctedIds={correctedIds}
+            onCorrect={setCorrecting}
+          />
 
           <div className="border-t border-border/60 p-3">
             <div className="flex items-center gap-2 rounded-2xl border border-input bg-card px-3.5 py-2 focus-within:ring-2 focus-within:ring-ring">
@@ -245,6 +265,14 @@ export function InboxView({ initial }: { initial: InboxConversationDTO[] }) {
           </div>
         </div>
       )}
+
+      <CorrectAnswerDialog
+        target={correcting}
+        onClose={() => setCorrecting(null)}
+        onSaved={(messageId) =>
+          setCorrectedIds((prev) => new Set(prev).add(messageId))
+        }
+      />
     </div>
   );
 }

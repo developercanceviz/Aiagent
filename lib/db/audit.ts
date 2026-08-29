@@ -8,6 +8,8 @@ export type AuditEventType =
   | "human.takeover"
   | "human.return"
   | "lead.captured"
+  | "lead.intent"
+  | "answer.corrected"
   | "escalated"
   | "ikas.connected"
   | "products.synced";

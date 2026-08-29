@@ -16,6 +16,8 @@ export async function upsertKnowledgeItem(
     title: string;
     content: string;
     sourceRef?: string;
+    /** CORRECTION only: the wrong answer being replaced. */
+    badAnswer?: string | null;
   },
   /** Precomputed embedding (batch path) — skips the per-item embed call. */
   precomputedVector?: number[]
@@ -30,7 +32,12 @@ export async function upsertKnowledgeItem(
   const row = existing
     ? await prisma.knowledgeItem.update({
         where: { id: existing.id },
-        data: { title: args.title, content: args.content, type: args.type },
+        data: {
+          title: args.title,
+          content: args.content,
+          type: args.type,
+          ...(args.badAnswer !== undefined ? { badAnswer: args.badAnswer } : {}),
+        },
       })
     : await prisma.knowledgeItem.create({
         data: {
@@ -39,6 +46,7 @@ export async function upsertKnowledgeItem(
           title: args.title,
           content: args.content,
           sourceRef: args.sourceRef,
+          badAnswer: args.badAnswer ?? null,
         },
       });
 

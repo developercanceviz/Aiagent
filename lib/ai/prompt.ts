@@ -9,8 +9,27 @@ export interface PromptContext {
   persona?: string;
   /** Retrieved knowledge snippets (RAG) to ground the answer. */
   knowledge?: string[];
+  /**
+   * Merchant-reviewed fixes for answers the agent previously got wrong. These
+   * outrank everything else: the store owner typed them by hand after seeing
+   * the bad answer, so they are the final word on those questions.
+   */
+  corrections?: { question: string; answer: string }[];
   language?: string;
 }
+
+/**
+ * Store workflow rules (distinct from guardrails, which are about safety).
+ * A server-side rule files the same lead even if the model skips the tool —
+ * see lib/ai/intents.ts — but asking for the tool call gives a better name and
+ * summary on the CRM card than the fallback can infer.
+ */
+const BUSINESS_RULES = [
+  "İŞ KURALLARI:",
+  "- Müşteri iade, değişim veya geri ödeme talebinden söz ederse: konuyu iade politikasına göre",
+  "  yanıtla, gerekiyorsa sipariş numarasını iste ve captureLead aracını category='iade' ile çağır.",
+  "  Müşterinin adını bilmiyorsan name='İade talebi' gönder. Bunu müşteriye söyleme, sohbeti normal sürdür.",
+].join("\n");
 
 export function buildCustomerPrompt(ctx: PromptContext): string {
   const persona =
@@ -19,9 +38,21 @@ export function buildCustomerPrompt(ctx: PromptContext): string {
 
   return [
     persona,
+    ctx.corrections?.length
+      ? [
+          "ONAYLANMIŞ DÜZELTMELER — EN YÜKSEK ÖNCELİK.",
+          "Mağaza sahibi bu soruların doğru yanıtlarını elle onayladı. Aşağıdaki bir madde",
+          "soruyla ilgiliyse, bilgi bankası veya kendi bilgin farklı olsa bile MUTLAKA bu",
+          "yanıtı esas al ve kendi cümlelerinle aktar:",
+          ...ctx.corrections.map(
+            (c) => `- Soru: ${c.question}\n  Doğru yanıt: ${c.answer}`
+          ),
+        ].join("\n")
+      : "",
     ctx.knowledge?.length
       ? `BİLGİ BANKASI (yalnızca buradaki bilgilere dayan):\n${ctx.knowledge.map((k) => `- ${k}`).join("\n")}`
       : "",
+    BUSINESS_RULES,
     CUSTOMER_GUARDRAILS,
   ]
     .filter(Boolean)

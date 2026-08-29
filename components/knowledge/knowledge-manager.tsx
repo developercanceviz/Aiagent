@@ -2,7 +2,16 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { BookOpen, Loader2, Plus, Search, Trash2, Upload, X } from "lucide-react";
+import {
+  BookOpen,
+  Loader2,
+  Plus,
+  Search,
+  SpellCheck,
+  Trash2,
+  Upload,
+  X,
+} from "lucide-react";
 
 import { useI18n } from "@/lib/i18n/provider";
 import { ikasFetch } from "@/lib/ikas/fetch";
@@ -12,6 +21,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   createKnowledgeItem,
   removeKnowledgeItem,
+  saveCorrection,
   type KnowledgeRow,
 } from "@/lib/actions/knowledge";
 
@@ -32,6 +42,16 @@ export function KnowledgeManager({ initial }: { initial: KnowledgeRow[] }) {
   const [type, setType] = React.useState<(typeof TYPES)[number]>("FAQ");
   const [title, setTitle] = React.useState("");
   const [content, setContent] = React.useState("");
+
+  // Corrections are a separate section: the merchant reviews what the agent
+  // answered wrongly and types what it should have said.
+  const [section, setSection] = React.useState<"knowledge" | "corrections">(
+    "knowledge"
+  );
+  const [cQuestion, setCQuestion] = React.useState("");
+  const [cBad, setCBad] = React.useState("");
+  const [cCorrect, setCCorrect] = React.useState("");
+  const [cError, setCError] = React.useState<string | null>(null);
 
   const fileRef = React.useRef<HTMLInputElement>(null);
   const [upl, setUpl] = React.useState<
@@ -74,11 +94,13 @@ export function KnowledgeManager({ initial }: { initial: KnowledgeRow[] }) {
     router.refresh();
   };
 
-  const filtered = items.filter(
-    (i) =>
-      i.title.toLowerCase().includes(query.toLowerCase()) ||
-      i.content.toLowerCase().includes(query.toLowerCase())
-  );
+  const matches = (i: KnowledgeRow) =>
+    i.title.toLowerCase().includes(query.toLowerCase()) ||
+    i.content.toLowerCase().includes(query.toLowerCase());
+
+  const corrections = items.filter((i) => i.type === "CORRECTION");
+  const filtered = items.filter((i) => i.type !== "CORRECTION" && matches(i));
+  const filteredCorrections = corrections.filter(matches);
 
   const submit = () => {
     if (!title.trim() || !content.trim()) return;
@@ -86,7 +108,7 @@ export function KnowledgeManager({ initial }: { initial: KnowledgeRow[] }) {
       try {
         await createKnowledgeItem({ type, title, content });
         setItems((prev) => [
-          { id: crypto.randomUUID(), type, title, content },
+          { id: crypto.randomUUID(), type, title, content, badAnswer: null },
           ...prev,
         ]);
         setTitle("");
@@ -95,6 +117,37 @@ export function KnowledgeManager({ initial }: { initial: KnowledgeRow[] }) {
       } catch {
         // Server action throws when no store is connected; keep the form open.
       }
+    });
+  };
+
+  const submitCorrection = () => {
+    if (!cQuestion.trim() || !cBad.trim() || !cCorrect.trim()) return;
+    startTransition(async () => {
+      const res = await saveCorrection({
+        question: cQuestion,
+        badAnswer: cBad,
+        correctAnswer: cCorrect,
+      }).catch(() => null);
+      if (!res || !res.ok) {
+        setCError(res && !res.ok ? res.error : "generic");
+        return;
+      }
+      setCError(null);
+      setItems((prev) => [
+        {
+          id: res.id,
+          type: "CORRECTION",
+          title: cQuestion,
+          content: cCorrect,
+          badAnswer: cBad,
+        },
+        ...prev,
+      ]);
+      setCQuestion("");
+      setCBad("");
+      setCCorrect("");
+      setOpen(false);
+      router.refresh();
     });
   };
 
@@ -144,6 +197,38 @@ export function KnowledgeManager({ initial }: { initial: KnowledgeRow[] }) {
         </div>
       </div>
 
+      {/* Bilgi / Düzeltmeler */}
+      <div className="flex items-center gap-1 self-start rounded-xl border border-border/60 bg-card p-1">
+        <button
+          onClick={() => setSection("knowledge")}
+          className={
+            "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors " +
+            (section === "knowledge"
+              ? "bg-ink text-ink-foreground"
+              : "text-muted-foreground hover:text-foreground")
+          }
+        >
+          <BookOpen className="size-3.5" /> {k.sections.knowledge}
+          <span className="rounded-md bg-white/15 px-1 text-[10px]">
+            {items.length - corrections.length}
+          </span>
+        </button>
+        <button
+          onClick={() => setSection("corrections")}
+          className={
+            "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors " +
+            (section === "corrections"
+              ? "bg-ink text-ink-foreground"
+              : "text-muted-foreground hover:text-foreground")
+          }
+        >
+          <SpellCheck className="size-3.5" /> {k.sections.corrections}
+          <span className="rounded-md bg-white/15 px-1 text-[10px]">
+            {corrections.length}
+          </span>
+        </button>
+      </div>
+
       {upl.kind !== "idle" && (
         <div
           className={
@@ -160,7 +245,58 @@ export function KnowledgeManager({ initial }: { initial: KnowledgeRow[] }) {
         </div>
       )}
 
-      {open && (
+      {open && section === "corrections" && (
+        <div className="space-y-3 rounded-2xl border border-border/60 bg-card p-4 shadow-card">
+          <p className="text-sm text-muted-foreground">{k.correction.formHint}</p>
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium text-muted-foreground">
+              {k.correction.question}
+            </span>
+            <Input
+              placeholder={k.correction.questionPlaceholder}
+              value={cQuestion}
+              onChange={(e) => setCQuestion(e.target.value)}
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium text-muted-foreground">
+              {k.correction.badAnswer}
+            </span>
+            <textarea
+              placeholder={k.correction.badAnswerPlaceholder}
+              value={cBad}
+              onChange={(e) => setCBad(e.target.value)}
+              rows={3}
+              className="w-full rounded-xl border border-input bg-card px-3.5 py-2.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium text-brand-700">
+              {k.correction.correctAnswer}
+            </span>
+            <textarea
+              placeholder={k.correction.correctAnswerPlaceholder}
+              value={cCorrect}
+              onChange={(e) => setCCorrect(e.target.value)}
+              rows={4}
+              className="w-full rounded-xl border border-primary/40 bg-primary/5 px-3.5 py-2.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+          </label>
+          {cError && (
+            <p className="text-xs text-red-700">
+              {cError === "no-session" ? k.correction.errorSession : k.correction.errorGeneric}
+            </p>
+          )}
+          <div className="flex justify-end">
+            <Button onClick={submitCorrection} disabled={pending}>
+              {pending && <Loader2 className="size-4 animate-spin" />}
+              {k.correction.save}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {open && section === "knowledge" && (
         <div className="space-y-3 rounded-2xl border border-border/60 bg-card p-4 shadow-card">
           <div className="flex flex-wrap gap-2">
             {TYPES.map((ty) => (
@@ -209,7 +345,58 @@ export function KnowledgeManager({ initial }: { initial: KnowledgeRow[] }) {
         />
       </div>
 
-      {filtered.length === 0 ? (
+      {section === "corrections" ? (
+        filteredCorrections.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-border/60 bg-card py-20 text-center shadow-card">
+            <div className="flex size-14 items-center justify-center rounded-full bg-muted text-muted-foreground">
+              <SpellCheck className="size-6" />
+            </div>
+            <p className="text-lg font-semibold">{k.correction.emptyTitle}</p>
+            <p className="max-w-sm text-sm text-muted-foreground">
+              {k.correction.emptySubtitle}
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {filteredCorrections.map((i) => (
+              <div
+                key={i.id}
+                className="rounded-2xl border border-border/60 bg-card p-4 shadow-card"
+              >
+                <div className="flex items-start gap-3">
+                  <Badge variant="feature" className="mt-0.5 shrink-0">
+                    {k.types.CORRECTION}
+                  </Badge>
+                  <p className="min-w-0 flex-1 font-medium">{i.title}</p>
+                  <button
+                    onClick={() => remove(i.id)}
+                    className="flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-red-50 hover:text-red-600"
+                    aria-label={k.correction.delete}
+                  >
+                    <Trash2 className="size-4" />
+                  </button>
+                </div>
+                <div className="mt-3 grid gap-2 md:grid-cols-2">
+                  <div className="rounded-xl border border-red-200 bg-red-50/60 p-3">
+                    <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-red-700">
+                      {k.correction.badAnswer}
+                    </p>
+                    <p className="whitespace-pre-wrap text-sm text-red-900/80 line-through decoration-red-300">
+                      {i.badAnswer ?? "—"}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-primary/40 bg-primary/5 p-3">
+                    <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-brand-700">
+                      {k.correction.correctAnswer}
+                    </p>
+                    <p className="whitespace-pre-wrap text-sm">{i.content}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )
+      ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-border/60 bg-card py-20 text-center shadow-card">
           <div className="flex size-14 items-center justify-center rounded-full bg-muted text-muted-foreground">
             <BookOpen className="size-6" />

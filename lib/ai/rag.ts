@@ -20,6 +20,9 @@ export interface RetrievedChunk {
   score: number;
 }
 
+/** Item types RAG can be narrowed to (mirrors Prisma's KbType). */
+export type RetrieveType = "FAQ" | "DOCUMENT" | "PRODUCT" | "POLICY" | "CORRECTION";
+
 export async function embed(text: string): Promise<number[]> {
   const [vec] = await embedBatch([text]);
   if (!vec) throw new Error("Embeddings response missing vector");
@@ -64,7 +67,15 @@ export async function embedBatch(texts: string[]): Promise<number[][]> {
 export async function retrieve(
   merchantId: string,
   query: string,
-  opts?: { limit?: number }
+  opts?: {
+    limit?: number;
+    /** Restrict to these item types (e.g. only reviewed CORRECTIONs). */
+    types?: RetrieveType[];
+    /** Drop anything below this cosine similarity. */
+    minScore?: number;
+    /** Skip these types (e.g. keep corrections out of the general context). */
+    excludeTypes?: RetrieveType[];
+  }
 ): Promise<RetrievedChunk[]> {
   if (!isConfigured.embeddings() || !isConfigured.database()) return [];
 
@@ -72,16 +83,25 @@ export async function retrieve(
   const literal = `[${vector.join(",")}]`;
   const limit = opts?.limit ?? 5;
 
+  const params: unknown[] = [literal, merchantId, limit];
+  let filter = "";
+  if (opts?.types?.length) {
+    params.push(opts.types);
+    filter += ` AND type::text = ANY($${params.length}::text[])`;
+  }
+  if (opts?.excludeTypes?.length) {
+    params.push(opts.excludeTypes);
+    filter += ` AND NOT (type::text = ANY($${params.length}::text[]))`;
+  }
+
   const rows = await prisma.$queryRawUnsafe<RetrievedChunk[]>(
     `SELECT id, title, content,
             1 - (embedding <=> $1::vector) AS score
        FROM "knowledge_items"
-      WHERE "merchantId" = $2 AND embedding IS NOT NULL
+      WHERE "merchantId" = $2 AND embedding IS NOT NULL${filter}
       ORDER BY embedding <=> $1::vector
       LIMIT $3`,
-    literal,
-    merchantId,
-    limit
+    ...params
   );
-  return rows;
+  return opts?.minScore ? rows.filter((r) => r.score >= opts.minScore!) : rows;
 }
