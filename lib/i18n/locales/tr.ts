@@ -174,6 +174,8 @@ export const tr = {
       requestCta: "Talep Oluştur",
       yourAgents: "AGENT'LARINIZ",
       channelAiControl: "KANAL AI KONTROLÜ",
+      channelAiWarning:
+        "Bu anahtar CANLI'dır — açıldığında gerçek müşterilere hemen AI yanıtı verilmeye başlanır. Test etmek için Mesajlar → Test sekmesini kullanın; o sekme bu anahtardan bağımsız çalışır.",
       conversations: "konuşma",
       messagesCount: "mesaj",
       active: "AKTİF",

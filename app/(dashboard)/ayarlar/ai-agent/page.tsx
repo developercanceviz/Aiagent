@@ -1,4 +1,4 @@
-import { ArrowRight, Bot, MessageSquare, Sparkles } from "lucide-react";
+import { AlertTriangle, ArrowRight, Bot, MessageSquare, Sparkles } from "lucide-react";
 
 import { formatNumber } from "@/lib/utils";
 import { getDictionary } from "@/lib/i18n";
@@ -82,6 +82,10 @@ export default async function AiAgentSettingsPage() {
           <span className="rounded-md bg-muted px-1.5 text-[11px] text-muted-foreground">
             {channels.length}
           </span>
+        </div>
+        <div className="flex items-start gap-2 border-b border-border/60 bg-amber-50 px-5 py-3 text-xs text-amber-900">
+          <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+          {tt.channelAiWarning}
         </div>
         <ChannelAiToggles channels={channels} />
       </div>
