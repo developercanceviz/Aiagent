@@ -5,6 +5,7 @@ import { Bot, Check, Pencil } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n/provider";
+import { ChatMarkdown } from "@/components/chat-markdown";
 import type { InboxMessageDTO } from "@/lib/actions/conversation";
 import type { CorrectionTarget } from "@/components/inbox/correct-answer-dialog";
 
@@ -53,12 +54,12 @@ export function MessageThread({
         >
           <div
             className={cn(
-              "max-w-[75%] whitespace-pre-wrap rounded-2xl px-3.5 py-2 text-sm",
+              "max-w-[75%] rounded-2xl px-3.5 py-2 text-sm",
               m.role === "CUSTOMER"
-                ? "bg-muted text-foreground"
+                ? "whitespace-pre-wrap bg-muted text-foreground"
                 : m.role === "AI"
                   ? "bg-sky-50 text-foreground"
-                  : "bg-primary text-primary-foreground"
+                  : "whitespace-pre-wrap bg-primary text-primary-foreground"
             )}
           >
             {m.role === "AI" && (
@@ -66,7 +67,7 @@ export function MessageThread({
                 <Bot className="size-3" /> AI
               </span>
             )}
-            {m.content}
+            {m.role === "AI" ? <ChatMarkdown>{m.content}</ChatMarkdown> : m.content}
           </div>
 
           {m.role === "AI" &&
