@@ -71,7 +71,12 @@ async function syncWebChatChannel(merchantId: string, active: boolean) {
   });
   const status = active ? "CONNECTED" : "DISCONNECTED";
   if (existing) {
-    await prisma.channel.update({ where: { id: existing.id }, data: { status } });
+    // aiEnabled mirrors active too — see setChannelAiEnabled's matching sync
+    // in the other direction; the two switches must never disagree.
+    await prisma.channel.update({
+      where: { id: existing.id },
+      data: { status, aiEnabled: active },
+    });
   } else {
     await prisma.channel.create({
       data: {

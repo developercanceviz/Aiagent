@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { isConfigured } from "@/lib/config/env";
 import { prisma } from "@/lib/db/client";
 import { getCurrentMerchantId } from "@/lib/auth/session";
+import { upsertWidgetConfig } from "@/lib/db/widget";
 import type { ChannelType } from "@prisma/client";
 
 /** The four channel slots the settings page always shows, in display order. */
@@ -58,6 +59,13 @@ export async function getChannelSettings(): Promise<ChannelSettingRow[]> {
  * Per-channel AI control (Ayarlar → AI Agent "Kanal AI Kontrolü"). Writes
  * Channel.aiEnabled. No-ops gracefully when the DB isn't connected so the UI
  * toggle still feels responsive in demo mode.
+ *
+ * For WEBCHAT specifically this also mirrors WidgetConfig.active — before this,
+ * the two "off" switches for Web Chat (this one and Ayarlar → Web Chat's own
+ * Aktif/Pasif) were independent: turning this one off showed "Pasif" here but
+ * left the floating bubble live on the storefront, since only WidgetConfig.active
+ * gates what the embedded widget.js renders. Keeping them in sync means either
+ * switch reliably controls whether the bubble shows.
  */
 export async function setChannelAiEnabled(
   channelId: string,
@@ -68,11 +76,17 @@ export async function setChannelAiEnabled(
   if (!merchantId) return { ok: false, aiEnabled: !enabled };
 
   // Tenant-scoped update: a channel id from another merchant matches nothing.
-  const res = await prisma.channel.updateMany({
+  const channel = await prisma.channel.findFirst({
     where: { id: channelId, merchantId },
-    data: { aiEnabled: enabled },
+    select: { type: true },
   });
-  if (res.count === 0) return { ok: false, aiEnabled: !enabled };
+  if (!channel) return { ok: false, aiEnabled: !enabled };
+
+  await prisma.channel.update({ where: { id: channelId }, data: { aiEnabled: enabled } });
+  if (channel.type === "WEBCHAT") {
+    await upsertWidgetConfig(merchantId, { active: enabled });
+    revalidatePath("/ayarlar/web-chat");
+  }
 
   revalidatePath("/ayarlar/ai-agent");
   revalidatePath("/ayarlar/kanallar");
