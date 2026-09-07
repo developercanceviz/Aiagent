@@ -99,3 +99,22 @@ describe("corrections in the customer prompt", () => {
     );
   });
 });
+
+describe("greeting instruction", () => {
+  it("instructs a greeting on the first turn (default)", () => {
+    const prompt = buildCustomerPrompt({ storeName: "Test" });
+    expect(prompt).toContain("Merhabalar efendim");
+    expect(prompt).not.toContain("Yeniden selamlama yapma");
+  });
+
+  it("instructs a greeting when isFirstTurn is explicitly true", () => {
+    const prompt = buildCustomerPrompt({ storeName: "Test", isFirstTurn: true });
+    expect(prompt).toMatch(/ilk yanıtın.*Merhabalar efendim/s);
+  });
+
+  it("forbids re-greeting once isFirstTurn is false", () => {
+    const prompt = buildCustomerPrompt({ storeName: "Test", isFirstTurn: false });
+    expect(prompt).toContain("Yeniden selamlama yapma");
+    expect(prompt).not.toMatch(/ilk yanıtın.*Merhabalar efendim/s);
+  });
+});

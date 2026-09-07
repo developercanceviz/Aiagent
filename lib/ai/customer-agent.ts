@@ -67,6 +67,10 @@ export async function prepareAgentRun(args: {
     storeName: merchant?.storeName ?? "Mağaza",
     knowledge: knowledge.map((k) => `${k.title}: ${k.content}`),
     corrections: corrections.map((c) => ({ question: c.title, answer: c.content })),
+    // No prior AI reply in history yet = this is the first turn. Decided here
+    // from real data rather than left for the model to infer from the
+    // message list — see the comment on greetingInstruction in prompt.ts.
+    isFirstTurn: !history.some((m) => m.role === "AI"),
   });
 
   const messages: CoreMessage[] = history.map((m) => ({

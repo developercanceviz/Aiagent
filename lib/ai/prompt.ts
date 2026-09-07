@@ -16,6 +16,14 @@ export interface PromptContext {
    */
   corrections?: { question: string; answer: string }[];
   language?: string;
+  /**
+   * True when the customer has no prior AI reply in this conversation.
+   * Decided in code (from conversation history), not left for the model to
+   * infer from the message list — a "don't repeat the greeting" instruction
+   * alone was observed re-firing on turn 2 in production. See
+   * lib/ai/customer-agent.ts.
+   */
+  isFirstTurn?: boolean;
 }
 
 /**
@@ -34,8 +42,6 @@ export interface PromptContext {
  */
 const BUSINESS_RULES = [
   "İŞ KURALLARI:",
-  "- Karşılama: konuşmadaki İLK yanıtın 'Merhabalar efendim.' ile başlamalı. Devam eden sohbette",
-  "  tekrar selamlama yapma, soruya doğrudan cevap ver.",
   "- Müşterinin daha önce verdiği bilgiyi (ad, sipariş no, sebep vb.) tekrar sorma.",
   "- İndirim oranı, ücret iadesi zamanı, kesin teslimat tarihi ve stok konusunda doğrulanmamış söz verme;",
   "  'hemen dönüş yapılacak' gibi kesin zaman ifadesi kullanma. Mesai dışı gelen taleplerde müşteri",
@@ -61,6 +67,21 @@ const BUSINESS_RULES = [
   "  tekrar çağırmak sorun değildir).",
 ].join("\n");
 
+/**
+ * Decided from conversation history (see isFirstTurn on PromptContext), not
+ * left to the model — an instruction of the form "greet once, then don't"
+ * was observed re-greeting on turn 2 in production testing (2026-09-07).
+ * Stating the correct behavior as a fact about *this* turn, rather than a
+ * conditional rule the model must evaluate against the message list, removed
+ * the failure in the same test conversation.
+ */
+function greetingInstruction(isFirstTurn: boolean): string {
+  return isFirstTurn
+    ? "KARŞILAMA: Bu konuşmadaki ilk yanıtın. Yanıtına 'Merhabalar efendim.' ile başla."
+    : "KARŞILAMA: Bu konuşmada müşteriye daha önce yanıt verildi. Yeniden selamlama yapma " +
+        "('Merhabalar efendim.' veya benzeri YAZMA) — soruya doğrudan cevap ver.";
+}
+
 export function buildCustomerPrompt(ctx: PromptContext): string {
   const persona =
     ctx.persona?.trim() ||
@@ -68,6 +89,7 @@ export function buildCustomerPrompt(ctx: PromptContext): string {
 
   return [
     persona,
+    greetingInstruction(ctx.isFirstTurn ?? true),
     ctx.corrections?.length
       ? [
           "ONAYLANMIŞ DÜZELTMELER — EN YÜKSEK ÖNCELİK.",
