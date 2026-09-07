@@ -7,6 +7,7 @@ import { getCurrentMerchantId } from "@/lib/auth/session";
 import { isConfigured } from "@/lib/config/env";
 import { widgetThemes } from "@/lib/config/widget-themes";
 import { defaultWidgetConfig, getWidgetConfig, upsertWidgetConfig } from "@/lib/db/widget";
+import { prisma } from "@/lib/db/client";
 
 export interface WidgetSettings {
   /** false when there's no DB or no session — the page then runs read-only. */
@@ -48,8 +49,40 @@ export async function setWidgetActive(
   if (!merchantId) return { ok: false, active: !active };
 
   await upsertWidgetConfig(merchantId, { active });
+  await syncWebChatChannel(merchantId, active);
   revalidatePath("/ayarlar/web-chat");
+  revalidatePath("/ayarlar/ai-agent");
+  revalidatePath("/ayarlar/kanallar");
   return { ok: true, active };
+}
+
+/**
+ * Keeps the WEBCHAT Channel row (what Ayarlar → AI Agent's "Kanal AI
+ * Kontrolü" reads) in sync with the widget's own on/off switch — previously
+ * these were two independent flags, so a merchant could activate the widget
+ * here and still see "Bağlı değil" on the channel-toggle page. Web Chat has
+ * no external OAuth connect step (unlike Meta channels), so this is the only
+ * place a row gets created.
+ */
+async function syncWebChatChannel(merchantId: string, active: boolean) {
+  const existing = await prisma.channel.findFirst({
+    where: { merchantId, type: "WEBCHAT" },
+    select: { id: true },
+  });
+  const status = active ? "CONNECTED" : "DISCONNECTED";
+  if (existing) {
+    await prisma.channel.update({ where: { id: existing.id }, data: { status } });
+  } else {
+    await prisma.channel.create({
+      data: {
+        merchantId,
+        type: "WEBCHAT",
+        displayName: "Web Sitesi",
+        status,
+        aiEnabled: true,
+      },
+    });
+  }
 }
 
 const publishInput = z.object({
