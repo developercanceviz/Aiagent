@@ -62,20 +62,25 @@ export function buildCustomerTools(ctx: CustomerToolContext) {
     captureLead: tool({
       description:
         "Müşteri iletişim/ilgi bilgisi verdiğinde CRM'e yeni lead ekler. " +
-        "Müşteri iade veya değişim talebinden söz ederse category='iade' gönder.",
+        "İade/değişim/iptal/kalite şikayeti için category='iade', mevcut sipariş takibi/adres-telefon " +
+        "değişikliği/fatura sorunu için category='takip', diğer insan desteği gereken durumlar için " +
+        "category='genel' gönder.",
       parameters: z.object({
         name: z.string().min(1),
         contact: z.string().nullable().describe("Telefon/e-posta; yoksa null"),
         intent: z.string().nullable().describe("İlgi/istek özeti; yoksa null"),
         category: z
-          .enum(["iade", "genel"])
+          .enum(["iade", "takip", "genel"])
           .nullable()
-          .describe("İade/değişim talebi ise 'iade', aksi halde 'genel'"),
+          .describe(
+            "İade/değişim/iptal/şikayet ise 'iade'; sipariş takibi/adres-telefon/fatura ise 'takip'; aksi halde 'genel'"
+          ),
       }),
       execute: async ({ name, contact, intent, category }) => {
         // The model only classifies; the column mapping is decided here so a
         // hallucinated stage name can never reach the database.
-        const stage = category === "iade" ? "IADE_TALEP" : "YENI";
+        const stage =
+          category === "iade" ? "IADE_TALEP" : category === "takip" ? "TAKIP" : "YENI";
         if (isConfigured.database()) {
           await prisma.lead.upsert({
             where: { conversationId: ctx.conversationId },

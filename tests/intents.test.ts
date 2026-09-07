@@ -26,6 +26,49 @@ describe("iade intent detection", () => {
   ])("leaves ordinary message %j alone", (text) => {
     expect(matchIntent(text)).toBeNull();
   });
+
+  it.each([
+    "siparişimi iptal etmek istiyorum",
+    "İPTAL ETMEK İSTİYORUM",
+  ])("files cancellation %j under İADE TALEPLERİ too", (text) => {
+    expect(matchIntent(text)?.stage).toBe("IADE_TALEP");
+  });
+
+  it.each([
+    "adresimi değiştirmek istiyorum",
+    "telefon numaramı değiştirebilir miyim",
+  ])("does not misfile address/phone change %j as İADE TALEPLERİ", (text) => {
+    expect(matchIntent(text)?.stage).not.toBe("IADE_TALEP");
+  });
+});
+
+describe("product-quality complaint detection", () => {
+  it.each([
+    "ürünüm ezilmiş geldi",
+    "hurmalar kırık gelmiş",
+    "paket yırtık ulaştı",
+    "ürün bayat geldi",
+    "çok kuru gelmiş",
+  ])("files arrival complaint %j under İADE TALEPLERİ", (text) => {
+    expect(matchIntent(text)?.stage).toBe("IADE_TALEP");
+  });
+
+  it.each([
+    "yumuşak hurma var mı?",
+    "kuru hurma çeşitleriniz neler",
+  ])("leaves a plain preference question %j alone", (text) => {
+    expect(matchIntent(text)).toBeNull();
+  });
+});
+
+describe("human-agent request detection", () => {
+  it.each([
+    "gerçek bir insanla görüşebilir miyim",
+    "müşteri temsilcisiyle görüşmek istiyorum",
+    "yetkili biriyle görüşmek istiyorum",
+  ])("files %j as YENİ", (text) => {
+    expect(matchIntent(text)?.stage).toBe("YENI");
+  });
 });
 
 describe("corrections in the customer prompt", () => {

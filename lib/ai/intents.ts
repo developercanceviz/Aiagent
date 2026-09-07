@@ -37,20 +37,62 @@ export function normalizeTr(text: string): string {
   return text.replace(/[İI]/g, "i").toLocaleLowerCase("tr");
 }
 
+/**
+ * "değiş(im/tir/...)" alone also matches address/phone-change requests
+ * ("adresimi değiştirmek istiyorum"), which the training doc routes to Takip,
+ * not İade Talepleri. Checked before the iade rule fires so those stay off
+ * this stage instead of being miscategorised.
+ */
+const ADDRESS_OR_PHONE_CHANGE = /adres|telefon\s*(numar)?/;
+
+/** Product arrived in a bad state — the doc's own example phrasing (section
+ * 11, "Ürün Kalitesi ve Şikâyetler"): always anchored to arrival wording so
+ * a plain preference question ("yumuşak hurma var mı?") doesn't match. */
+const ARRIVAL_COMPLAINT =
+  /(bayat|ekşi|tatsız|kuru|yumuşak|ezil|kırık|kırılmış|bozuk|çürük|küflü|yırtık|delik|hasar)[^.!?\n]{0,25}(geldi|gelmiş|geliyor|ulaştı|ulaşmış)/;
+
 export const INTENT_RULES: IntentRule[] = [
   {
     key: "iade",
     stage: "IADE_TALEP",
     // Turkish is agglutinative: iade / iadesi / iademi / iadeyi share the stem,
     // so a stem match beats an exact-word one. "değişim/değiştir" covers
-    // exchange requests, which the merchant handles through the same process.
-    test: /iade|değiş(im|tir|ecek|ebilir)|geri\s*(gönder|iade|ödeme|göndermek)/,
-    note: "İade/değişim talebi — sohbette otomatik algılandı.",
+    // exchange requests; "iptal" covers order cancellation — the doc files
+    // both under İade Talepleri, alongside refunds.
+    test: /iade|değiş(im|tir|ecek|ebilir)|geri\s*(gönder|iade|ödeme|göndermek)|iptal/,
+    note: "İade/değişim/iptal talebi — sohbette otomatik algılandı.",
+  },
+  {
+    key: "sikayet",
+    stage: "IADE_TALEP",
+    test: ARRIVAL_COMPLAINT,
+    note: "Ürün kalitesi şikayeti — sohbette otomatik algılandı.",
+  },
+  {
+    key: "insan_talebi",
+    stage: "YENI",
+    // Explicit request for a human — the doc marks this mandatory: "Talep
+    // hemen CRM kaydına dönüştürülmelidir." \w* absorbs the Turkish
+    // "ile"-postposition suffix, whose spelling changes with vowel harmony
+    // (insanla/kişiyle/temsilciyle/biriyle) rather than enumerating each
+    // form; "görüş" required nearby so e.g. "gerçek bir insan değilsin"
+    // doesn't match.
+    test: /gerçek\s*(bir\s*)?(insan|kişi)\w*\s*görüş|(müşteri\s*)?temsilci\w*\s*görüş|yetkili\s*(bir\s*)?(kişi|biri)\w*\s*görüş/,
+    note: "Gerçek kişiyle görüşme talebi — sohbette otomatik algılandı.",
   },
 ];
 
 export function matchIntent(text: string): IntentRule | null {
   const normalized = normalizeTr(text);
+  if (
+    ADDRESS_OR_PHONE_CHANGE.test(normalized) &&
+    /değiş/.test(normalized) &&
+    !/iade|iptal|geri\s*(gönder|iade|ödeme|göndermek)/.test(normalized)
+  ) {
+    // "adresimi/telefonumu değiştirmek istiyorum" — not a return, leave for
+    // the model (captureLead category='takip') rather than misfile as iade.
+    return INTENT_RULES.find((r) => r.key !== "iade" && r.test.test(normalized)) ?? null;
+  }
   return INTENT_RULES.find((r) => r.test.test(normalized)) ?? null;
 }
 
