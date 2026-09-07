@@ -100,6 +100,19 @@ describe("corrections in the customer prompt", () => {
   });
 });
 
+describe("hardcoded business facts", () => {
+  it("includes the support/collaboration WhatsApp number so it can't be misquoted", () => {
+    const prompt = buildCustomerPrompt({ storeName: "Test" });
+    expect(prompt).toContain("0553 522 98 95");
+  });
+
+  it("includes the no-cash-on-delivery and no-installment facts", () => {
+    const prompt = buildCustomerPrompt({ storeName: "Test" });
+    expect(prompt).toContain("kapıda ödeme YOKTUR");
+    expect(prompt).toContain("taksit YAPILMAZ");
+  });
+});
+
 describe("greeting instruction", () => {
   it("instructs a greeting on the first turn (default)", () => {
     const prompt = buildCustomerPrompt({ storeName: "Test" });
