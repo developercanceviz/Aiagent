@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db/client";
-import type { ChannelType, MsgRole } from "@prisma/client";
+import type { ChannelType, MsgRole, Prisma } from "@prisma/client";
 
 /**
  * Conversation + message data-access. All functions take merchantId explicitly
@@ -61,11 +61,30 @@ export async function getConversationHistory(conversationId: string, limit = 20)
   });
 }
 
-export async function listConversations(merchantId: string) {
-  return prisma.conversation.findMany({
+/**
+ * Inbox tab filters. Applied in the WHERE clause, not after the fact — the
+ * list is capped at 100 rows, and "live" (human-handled) conversations are a
+ * small fraction of total traffic (~1% here), so filtering the already-capped
+ * "all" page client-side was hiding nearly every one of them: only 1 of 42
+ * human-handled conversations fell inside the most-recent-100 window.
+ */
+export type InboxFilter = "instagram" | "whatsapp" | "webchat" | "messenger" | "live";
+
+export async function listConversations(merchantId: string, filter?: InboxFilter) {
+  const where: Prisma.ConversationWhereInput = {
     // Test conversations live behind the Mesajlar → Test tab; they must not
     // pollute the real inbox or the counts derived from it.
-    where: { merchantId, archived: false, isTest: false },
+    merchantId,
+    archived: false,
+    isTest: false,
+  };
+  if (filter === "live") {
+    where.handledBy = "HUMAN";
+  } else if (filter) {
+    where.channelType = filter.toUpperCase() as ChannelType;
+  }
+  return prisma.conversation.findMany({
+    where,
     orderBy: { lastMessageAt: "desc" },
     take: 100,
   });

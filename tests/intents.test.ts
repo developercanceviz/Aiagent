@@ -111,6 +111,16 @@ describe("hardcoded business facts", () => {
     expect(prompt).toContain("kapıda ödeme YOKTUR");
     expect(prompt).toContain("taksit YAPILMAZ");
   });
+
+  it("clarifies 'bebek incir' is a dried-fig size, not baby products", () => {
+    // Production incident: the agent read "bebek incir" (a real product —
+    // small-size dried fig) as literal "bebek" (baby) and invented a
+    // nonexistent baby-products campaign in its reply.
+    const prompt = buildCustomerPrompt({ storeName: "Test" });
+    expect(prompt).toContain("bebek incir");
+    expect(prompt).toContain("KÜÇÜK BOY KURU İNCİR");
+    expect(prompt).toContain("hiçbir bebek/çocuk ürünü YOKTUR");
+  });
 });
 
 describe("greeting instruction", () => {

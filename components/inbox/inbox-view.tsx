@@ -47,10 +47,31 @@ export function InboxView({ initial }: { initial: InboxConversationDTO[] }) {
   const [draft, setDraft] = React.useState("");
   const [, startTransition] = React.useTransition();
 
+  // "all"/"test" both mean "no server-side filter" — test conversations are
+  // already excluded in listConversations regardless.
+  const dbFilter = filter === "all" || filter === "test" ? undefined : filter;
   const refresh = React.useCallback(() => {
-    startTransition(async () => setConversations(await getInboxConversations()));
-  }, []);
+    startTransition(async () => setConversations(await getInboxConversations(dbFilter)));
+  }, [dbFilter]);
   useConversationsRealtime(refresh);
+
+  // Re-fetch from the server whenever the active tab changes. Previously the
+  // tabs filtered the single "most recent 100 overall" list client-side —
+  // for a low-frequency state like "live" (human-handled), that meant only
+  // 1 of 42 such conversations ever showed up, because the other 41 fell
+  // outside that shared top-100 window. Each tab now gets its own top-100
+  // query scoped to what it actually shows.
+  const mounted = React.useRef(false);
+  React.useEffect(() => {
+    // Skip on mount: `initial` (server-rendered "all") already matches.
+    if (!mounted.current) {
+      mounted.current = true;
+      return;
+    }
+    if (filter === "test") return;
+    refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter]);
 
   React.useEffect(() => {
     if (!activeId) return;
@@ -70,13 +91,9 @@ export function InboxView({ initial }: { initial: InboxConversationDTO[] }) {
     { key: "live" as const, label: t.messages.filters.live },
     { key: "test" as const, label: t.messages.test.tab, icon: FlaskConical },
   ];
-  const visible = conversations.filter((c) =>
-    filter === "all" || filter === "test"
-      ? true
-      : filter === "live"
-        ? c.handledBy === "HUMAN"
-        : c.channel === filter
-  );
+  // conversations is already scoped to the active tab server-side (see
+  // refresh/dbFilter above), so no client-side re-filtering here.
+  const visible = conversations;
 
   const send = () => {
     if (!draft.trim() || !active) return;

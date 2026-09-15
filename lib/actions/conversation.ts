@@ -9,6 +9,7 @@ import {
   getConversationHistory,
   listConversations,
   setHandledBy,
+  type InboxFilter,
 } from "@/lib/db/conversation";
 import { logEvent } from "@/lib/db/audit";
 import { recentConversations } from "@/lib/mock/dashboard";
@@ -41,11 +42,13 @@ const mockInbox: InboxConversationDTO[] = recentConversations.map((c, i) => ({
   handledBy: "AI",
 }));
 
-export async function getInboxConversations(): Promise<InboxConversationDTO[]> {
+export async function getInboxConversations(
+  filter?: InboxFilter
+): Promise<InboxConversationDTO[]> {
   if (!isConfigured.database()) return mockInbox;
   const merchantId = await getCurrentMerchantId();
   if (!merchantId) return mockInbox;
-  const rows = await listConversations(merchantId);
+  const rows = await listConversations(merchantId, filter);
   return rows.map((r) => ({
     id: r.id,
     name: r.customerName ?? "Müşteri",
