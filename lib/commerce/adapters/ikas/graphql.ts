@@ -105,7 +105,7 @@ export const LIST_PRODUCTS = /* GraphQL */ `
           id
           sku
           stocks { stockCount }
-          prices { sellPrice currency currencyCode }
+          prices { sellPrice discountPrice currency currencyCode }
           images { imageId isMain order }
         }
       }

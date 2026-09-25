@@ -1,4 +1,5 @@
 import type {
+  NormalizedMoney,
   NormalizedOrder,
   NormalizedProduct,
   OrderStatus,
@@ -80,7 +81,12 @@ interface RawVariant {
   id: string;
   sku?: string;
   stocks?: Array<{ stockCount?: number }>;
-  prices?: Array<{ sellPrice?: number; currency?: string | null; currencyCode?: string | null }>;
+  prices?: Array<{
+    sellPrice?: number;
+    discountPrice?: number | null;
+    currency?: string | null;
+    currencyCode?: string | null;
+  }>;
   images?: Array<{ imageId?: string; isMain?: boolean; order?: number }>;
 }
 
@@ -96,6 +102,32 @@ export function variantStock(v: RawVariant): number {
   return (v.stocks ?? []).reduce((sum, s) => sum + (s.stockCount ?? 0), 0);
 }
 
+type RawPriceEntry = NonNullable<RawVariant["prices"]>[number];
+
+/**
+ * ikas exposes both a list price (`sellPrice`) and an optional active-campaign
+ * price (`discountPrice`) per variant. The storefront shows `discountPrice`
+ * whenever it's set and lower than `sellPrice` — that's what a customer
+ * actually pays. Before this, only `sellPrice` was read, so any product on a
+ * live campaign was quoted at its pre-discount price (confirmed live:
+ * "İran Hurması 12'li Koli" — quoted ₺1.500, storefront shows ₺1.250, 17% off).
+ */
+function effectivePrice(entry?: RawPriceEntry): number {
+  const sell = entry?.sellPrice ?? 0;
+  const discount = entry?.discountPrice;
+  return discount != null && discount > 0 && discount < sell ? discount : sell;
+}
+
+function compareAtPrice(
+  entry: RawPriceEntry | undefined,
+  currency: string
+): NormalizedMoney | undefined {
+  const sell = entry?.sellPrice ?? 0;
+  const discount = entry?.discountPrice;
+  if (discount == null || discount <= 0 || discount >= sell) return undefined;
+  return { amount: sell, currency };
+}
+
 export function normalizeProduct(p: RawProduct): NormalizedProduct {
   const firstVariant = p.variants?.[0];
   const firstPrice = firstVariant?.prices?.[0];
@@ -105,17 +137,20 @@ export function normalizeProduct(p: RawProduct): NormalizedProduct {
     id: p.id,
     name: p.name,
     description: p.description ?? undefined,
-    price: { amount: firstPrice?.sellPrice ?? 0, currency },
+    price: { amount: effectivePrice(firstPrice), currency },
+    compareAtPrice: compareAtPrice(firstPrice, currency),
     stock: p.totalStock ?? 0,
-    variants: (p.variants ?? []).map((v) => ({
-      id: v.id,
-      title: v.sku ?? v.id,
-      price: {
-        amount: v.prices?.[0]?.sellPrice ?? 0,
-        currency: v.prices?.[0]?.currencyCode ?? v.prices?.[0]?.currency ?? currency,
-      },
-      stock: variantStock(v),
-    })),
+    variants: (p.variants ?? []).map((v) => {
+      const vPrice = v.prices?.[0];
+      const vCurrency = vPrice?.currencyCode ?? vPrice?.currency ?? currency;
+      return {
+        id: v.id,
+        title: v.sku ?? v.id,
+        price: { amount: effectivePrice(vPrice), currency: vCurrency },
+        compareAtPrice: compareAtPrice(vPrice, vCurrency),
+        stock: variantStock(v),
+      };
+    }),
     images: (p.variants ?? [])
       .flatMap((v) => v.images ?? [])
       .sort((a, b) => Number(b.isMain ?? false) - Number(a.isMain ?? false) || (a.order ?? 0) - (b.order ?? 0))

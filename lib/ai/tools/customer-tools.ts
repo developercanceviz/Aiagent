@@ -107,14 +107,23 @@ function buildCommerceTools(
 ) {
   return {
     searchProducts: tool({
-      description: "Mağaza ürünlerinde arama yapar; isim, fiyat ve stok döndürür.",
+      description:
+        "Mağaza ürünlerinde arama yapar; isim, fiyat (aktif kampanya varsa indirimli fiyat) ve stok döndürür.",
       parameters: z.object({ query: z.string().min(1) }),
       execute: async ({ query }) => {
         const products = await ctx.adapter.searchProducts(query);
+        // price is always the effective (discounted, if a campaign is active)
+        // price — never quote compareAtPrice as the price to pay.
         return products.slice(0, 5).map((p) => ({
           id: p.id,
           name: p.name,
           price: formatTRY(p.price.amount),
+          ...(p.compareAtPrice
+            ? {
+                normalFiyat: formatTRY(p.compareAtPrice.amount),
+                kampanyaNotu: "Bu ürün şu an indirimde; 'price' ödenecek indirimli fiyat, 'normalFiyat' indirimsiz liste fiyatıdır.",
+              }
+            : {}),
           stock: p.stock,
           url: p.url,
         }));

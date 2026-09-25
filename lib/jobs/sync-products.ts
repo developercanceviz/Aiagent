@@ -22,14 +22,26 @@ export async function syncProductsToKnowledge(payload: {
   for (let i = 0; i < 50; i++) {
     const page = await adapter.listProducts({ cursor, limit: 50 });
 
+    // price is always the effective (discounted, if a campaign is active)
+    // price; compareAtPrice — when present — is the pre-discount list price.
+    // Recording both means a stale knowledge-base read still shows the right
+    // price to pay, not the discount-less sellPrice.
+    const priceLine = (amount: number, currency: string, compareAt?: { amount: number }) =>
+      compareAt
+        ? `${formatTRY(amount)} (İndirimli fiyat; normal fiyat ${formatTRY(compareAt.amount)})`
+        : formatTRY(amount);
+
     const items = page.data.map((p) => {
       const variantLines = p.variants
-        .map((v) => `${v.title}: ${formatTRY(v.price.amount)} (stok: ${v.stock})`)
+        .map(
+          (v) =>
+            `${v.title}: ${priceLine(v.price.amount, v.price.currency, v.compareAtPrice)} (stok: ${v.stock})`
+        )
         .join("\n");
       const content = [
         p.name,
         p.description ?? "",
-        `Fiyat: ${formatTRY(p.price.amount)}`,
+        `Fiyat: ${priceLine(p.price.amount, p.price.currency, p.compareAtPrice)}`,
         `Toplam stok: ${p.stock}`,
         variantLines,
         p.url ?? "",

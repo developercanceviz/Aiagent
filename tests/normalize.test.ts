@@ -60,4 +60,47 @@ describe("ikas normalizers", () => {
     expect(p.variants[0]?.stock).toBe(12); // summed across locations
     expect(p.images).toEqual(["a", "b"]); // isMain wins over order
   });
+
+  it("prefers the active campaign price over the list price", () => {
+    // Production incident: "İran Hurması 12'li Koli" was quoted at ₺1.500
+    // (sellPrice) while the storefront — and the customer — showed ₺1.250
+    // (discountPrice, 17% off). Only sellPrice was read before this.
+    const p = normalizeProduct({
+      id: "p1",
+      name: "İran Hurması 12'li Koli",
+      totalStock: 179,
+      variants: [
+        {
+          id: "v1",
+          sku: "IH-12",
+          stocks: [{ stockCount: 179 }],
+          prices: [{ sellPrice: 1500, discountPrice: 1250, currency: "TRY" }],
+        },
+      ],
+    });
+    expect(p.price.amount).toBe(1250);
+    expect(p.compareAtPrice?.amount).toBe(1500);
+    expect(p.variants[0]?.price.amount).toBe(1250);
+    expect(p.variants[0]?.compareAtPrice?.amount).toBe(1500);
+  });
+
+  it("ignores discountPrice when it isn't actually a discount", () => {
+    const noDiscount = normalizeProduct({
+      id: "p2",
+      name: "No Campaign",
+      variants: [{ id: "v1", prices: [{ sellPrice: 500, discountPrice: 0 }] }],
+    });
+    expect(noDiscount.price.amount).toBe(500);
+    expect(noDiscount.compareAtPrice).toBeUndefined();
+
+    // discountPrice >= sellPrice should never happen, but must not be treated
+    // as a discount if it does (e.g. stale/inconsistent data upstream).
+    const badData = normalizeProduct({
+      id: "p3",
+      name: "Bad Data",
+      variants: [{ id: "v1", prices: [{ sellPrice: 500, discountPrice: 600 }] }],
+    });
+    expect(badData.price.amount).toBe(500);
+    expect(badData.compareAtPrice).toBeUndefined();
+  });
 });

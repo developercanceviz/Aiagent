@@ -47,7 +47,10 @@ export interface NormalizedOrder {
 export interface NormalizedVariant {
   id: string;
   title: string;
+  /** Effective price — the discounted/campaign price when one is active. */
   price: NormalizedMoney;
+  /** Pre-discount list price, present only when it differs from `price`. */
+  compareAtPrice?: NormalizedMoney;
   stock: number;
 }
 
@@ -55,7 +58,10 @@ export interface NormalizedProduct {
   id: string;
   name: string;
   description?: string;
+  /** Effective price — the discounted/campaign price when one is active. */
   price: NormalizedMoney;
+  /** Pre-discount list price, present only when it differs from `price`. */
+  compareAtPrice?: NormalizedMoney;
   stock: number;
   variants: NormalizedVariant[];
   images: string[];
