@@ -39,7 +39,8 @@ export async function refreshIkasTokenIfNeeded(
   }
 
   const refreshToken = decryptSecret(merchant.refreshToken);
-  const next = await refreshAccessToken(refreshToken);
+  const storeName = merchant.storeDomain?.split(".")[0] ?? merchant.storeName;
+  const next = await refreshAccessToken(refreshToken, storeName);
 
   return prisma.merchant.update({
     where: { id: merchant.id },

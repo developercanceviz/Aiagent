@@ -133,20 +133,34 @@ export function readStoreIdFromToken(accessToken: string): string | null {
 }
 
 export async function refreshAccessToken(
-  refreshToken: string
+  refreshToken: string,
+  /** Store slug, when known — its own token endpoint is the one proven live;
+   *  the central v1 host started 404ing (confirmed live 2026-09-25) and was
+   *  the ONLY endpoint this call tried, silently breaking the ikas
+   *  connection for every merchant on the OAuth (non-private-app) flow once
+   *  their access token expired. */
+  storeName?: string | null
 ): Promise<IkasTokenResponse> {
-  const res = await fetch(`${IKAS_AUTH_BASE}/token`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "refresh_token",
-      client_id: env.ikasClientId ?? "",
-      client_secret: env.ikasClientSecret ?? "",
-      refresh_token: refreshToken,
-    }),
+  const body = new URLSearchParams({
+    grant_type: "refresh_token",
+    client_id: env.ikasClientId ?? "",
+    client_secret: env.ikasClientSecret ?? "",
+    refresh_token: refreshToken,
   });
-  if (!res.ok) {
-    throw new Error(`ikas token refresh failed: ${res.status} ${await res.text()}`);
+  const endpoints = [
+    ...(storeName ? [`https://${storeName}.myikas.com/api/admin/oauth/token`] : []),
+    `${IKAS_AUTH_BASE}/token`,
+  ];
+
+  const failures: string[] = [];
+  for (const url of endpoints) {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body,
+    });
+    if (res.ok) return (await res.json()) as IkasTokenResponse;
+    failures.push(`${url} → ${res.status} ${(await res.text()).slice(0, 200)}`);
   }
-  return (await res.json()) as IkasTokenResponse;
+  throw new Error(`ikas token refresh failed: ${failures.join(" | ")}`);
 }
