@@ -86,6 +86,10 @@ export const LIST_ORDERS = /* GraphQL */ `
           finalPrice
           variant { id productId name }
         }
+        orderPackages {
+          orderPackageFulfillStatus
+          trackingInfo { trackingNumber trackingLink cargoCompany }
+        }
       }
     }
   }

@@ -2,6 +2,7 @@ import type {
   NormalizedMoney,
   NormalizedOrder,
   NormalizedProduct,
+  NormalizedTracking,
   OrderStatus,
 } from "@/lib/commerce/types";
 
@@ -50,6 +51,79 @@ interface RawOrder {
     finalPrice: number;
     variant?: { id?: string; productId?: string; name?: string } | null;
   }>;
+  orderPackages?: Array<{
+    orderPackageFulfillStatus?: string;
+    trackingInfo?: {
+      trackingNumber?: string | null;
+      trackingLink?: string | null;
+      cargoCompany?: string | null;
+    } | null;
+  }>;
+}
+
+/** ikas's OrderPackageFulfillStatusEnum, in plain Turkish for the agent to
+ *  read straight out — verified live against real shipped/returned orders. */
+function packageStatusLabel(status: string | undefined): string {
+  switch (status) {
+    case "PLANNED":
+      return "Hazırlanıyor";
+    case "WAITING_FOR_PACKAGING":
+      return "Paketleniyor";
+    case "READY_FOR_SHIPMENT":
+      return "Kargoya verilmeye hazır";
+    case "READY_FOR_PICK_UP":
+      return "Şubeden teslim almaya hazır";
+    case "FULFILLED":
+      return "Kargoya verildi";
+    case "DELIVERED":
+      return "Teslim edildi";
+    case "UNABLE_TO_DELIVER":
+      return "Teslim edilemedi";
+    case "CANCELLED":
+      return "İptal edildi";
+    case "CANCEL_REQUESTED":
+      return "İptal talebi alındı";
+    case "CANCEL_REJECTED":
+      return "İptal talebi reddedildi";
+    case "REFUNDED":
+      return "İade edildi";
+    case "REFUND_REQUESTED":
+      return "İade talebi alındı";
+    case "REFUND_REQUEST_ACCEPTED":
+      return "İade talebi onaylandı";
+    case "REFUND_REJECTED":
+      return "İade talebi reddedildi";
+    case "RETURN_PARCEL_WAITING":
+      return "İade kargosu bekleniyor";
+    case "RETURN_IN_TRANSIT":
+      return "İade kargoda";
+    case "RETURN_DELIVERED":
+      return "İade kargosu teslim edildi";
+    case "RETURN_REJECTED":
+      return "İade reddedildi";
+    case "ERROR":
+      return "Kargo işleminde hata oluştu";
+    default:
+      return "Durum bilgisi yok";
+  }
+}
+
+/** The most recent package on the order — ikas returns them in creation
+ *  order and a single-package order is by far the common case; for a
+ *  partially-split shipment this surfaces the latest leg rather than every
+ *  one, which is enough for "where's my order" without overcomplicating the
+ *  tool's response. */
+function normalizeTracking(o: RawOrder): NormalizedTracking | undefined {
+  const pkg = (o.orderPackages ?? []).at(-1);
+  if (!pkg) return undefined;
+  return {
+    // Unset while still PLANNED/being packed — the status alone is still
+    // worth returning rather than treating "no package yet" as "no order".
+    number: pkg.trackingInfo?.trackingNumber ?? undefined,
+    link: pkg.trackingInfo?.trackingLink ?? undefined,
+    carrier: pkg.trackingInfo?.cargoCompany ?? undefined,
+    status: packageStatusLabel(pkg.orderPackageFulfillStatus),
+  };
 }
 
 export function normalizeOrder(o: RawOrder): NormalizedOrder {
@@ -72,6 +146,7 @@ export function normalizeOrder(o: RawOrder): NormalizedOrder {
       o.createdAt != null
         ? new Date(o.createdAt).toISOString()
         : new Date().toISOString(),
+    tracking: normalizeTracking(o),
   };
 }
 

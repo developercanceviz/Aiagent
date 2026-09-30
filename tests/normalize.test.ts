@@ -33,6 +33,48 @@ describe("ikas normalizers", () => {
     expect(o.total.amount).toBe(250);
     expect(o.city).toBe("İstanbul");
     expect(o.items[0]?.quantity).toBe(2);
+    expect(o.tracking).toBeUndefined();
+  });
+
+  it("normalizes tracking info from the latest order package", () => {
+    // Real shape confirmed live: DHL eCommerce order CCH44524.
+    const o = normalizeOrder({
+      id: "o2",
+      orderNumber: "CCH44524",
+      status: "CREATED",
+      orderPackages: [
+        {
+          orderPackageFulfillStatus: "DELIVERED",
+          trackingInfo: {
+            trackingNumber: "368674663441",
+            trackingLink: "https://kargotakip.dhlecommerce.com.tr/?takipNo=368674663441",
+            cargoCompany: "DHL eCommerce",
+          },
+        },
+      ],
+    });
+    expect(o.tracking).toEqual({
+      number: "368674663441",
+      link: "https://kargotakip.dhlecommerce.com.tr/?takipNo=368674663441",
+      carrier: "DHL eCommerce",
+      status: "Teslim edildi",
+    });
+  });
+
+  it("still returns a status when no tracking number is assigned yet", () => {
+    // A freshly-created package (PLANNED) has no carrier/number yet — the
+    // customer should still hear "being prepared", not silence.
+    const o = normalizeOrder({
+      id: "o3",
+      orderNumber: "CCH99999",
+      orderPackages: [{ orderPackageFulfillStatus: "PLANNED", trackingInfo: null }],
+    });
+    expect(o.tracking).toEqual({
+      number: undefined,
+      link: undefined,
+      carrier: undefined,
+      status: "Hazırlanıyor",
+    });
   });
 
   it("normalizes a product with variants and sorted images", () => {

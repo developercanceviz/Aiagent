@@ -42,6 +42,19 @@ export interface NormalizedOrder {
   customerRef?: string;
   city?: string;
   createdAt: string; // ISO
+  /** Present once the order has at least one shipped package. */
+  tracking?: NormalizedTracking;
+}
+
+export interface NormalizedTracking {
+  /** Unset while the package is still PLANNED/being packed — no carrier has
+   *  picked it up yet, so ikas has no tracking number to give out. */
+  number?: string;
+  /** Carrier's own tracking page, when ikas has one on file. */
+  link?: string;
+  carrier?: string;
+  /** Plain-language delivery status, e.g. "Teslim edildi", "Kargoda". */
+  status: string;
 }
 
 export interface NormalizedVariant {

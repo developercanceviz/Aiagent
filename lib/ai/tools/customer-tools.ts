@@ -141,7 +141,9 @@ function buildCommerceTools(
 
     getOrderStatus: tool({
       description:
-        "Sipariş durumunu döndürür. SADECE müşteri kendi sipariş numarasını ve eşleşen e-posta VEYA telefon bilgisini verirse çalışır. Eşleşme yoksa sipariş bilgisi paylaşma.",
+        "Sipariş durumunu ve varsa kargo takip bilgisini (kargo firması, takip numarası, takip linki) döndürür. " +
+        "SADECE müşteri kendi sipariş numarasını ve eşleşen e-posta VEYA telefon bilgisini verirse çalışır. " +
+        "Eşleşme yoksa sipariş bilgisi paylaşma.",
       // Nullable (not optional): OpenAI strict mode requires every property
       // to be listed in `required`.
       parameters: z.object({
@@ -166,6 +168,15 @@ function buildCommerceTools(
           status: order.status,
           total: formatTRY(order.total.amount),
           createdAt: order.createdAt,
+          // Absent until a package exists at all (order not yet fulfilled).
+          ...(order.tracking
+            ? {
+                kargoDurumu: order.tracking.status,
+                kargoFirmasi: order.tracking.carrier ?? null,
+                takipNumarasi: order.tracking.number ?? null,
+                takipLinki: order.tracking.link ?? null,
+              }
+            : {}),
         };
       },
     }),
