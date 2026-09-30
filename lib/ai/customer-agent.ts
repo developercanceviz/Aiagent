@@ -1,7 +1,7 @@
 import { generateText, type CoreMessage } from "ai";
 
 import { getModel } from "@/lib/ai/provider";
-import { buildCustomerPrompt } from "@/lib/ai/prompt";
+import { buildCustomerPrompt, detectIslamicGreeting } from "@/lib/ai/prompt";
 import { buildCustomerTools } from "@/lib/ai/tools/customer-tools";
 import { retrieve } from "@/lib/ai/rag";
 import { applyIntentRules } from "@/lib/ai/intents";
@@ -63,14 +63,19 @@ export async function prepareAgentRun(args: {
     }).catch(() => null),
   ]);
 
+  // No prior AI reply in history yet = this is the first turn. Decided here
+  // from real data rather than left for the model to infer from the message
+  // list — see the comment on greetingInstruction in prompt.ts.
+  const isFirstTurn = !history.some((m) => m.role === "AI");
+
   const system = buildCustomerPrompt({
     storeName: merchant?.storeName ?? "Mağaza",
     knowledge: knowledge.map((k) => `${k.title}: ${k.content}`),
     corrections: corrections.map((c) => ({ question: c.title, answer: c.content })),
-    // No prior AI reply in history yet = this is the first turn. Decided here
-    // from real data rather than left for the model to infer from the
-    // message list — see the comment on greetingInstruction in prompt.ts.
-    isFirstTurn: !history.some((m) => m.role === "AI"),
+    isFirstTurn,
+    // Only meaningful on the opening message — checking it on every later
+    // turn would misfire if "s.a." or similar ever appeared mid-sentence.
+    customerGreetedIslamic: isFirstTurn && detectIslamicGreeting(args.latestUserText),
   });
 
   const messages: CoreMessage[] = history.map((m) => ({

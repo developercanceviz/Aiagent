@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { matchIntent } from "@/lib/ai/intents";
-import { buildCustomerPrompt } from "@/lib/ai/prompt";
+import { buildCustomerPrompt, detectIslamicGreeting } from "@/lib/ai/prompt";
 
 describe("iade intent detection", () => {
   it.each([
@@ -139,5 +139,39 @@ describe("greeting instruction", () => {
     const prompt = buildCustomerPrompt({ storeName: "Test", isFirstTurn: false });
     expect(prompt).toContain("Yeniden selamlama yapma");
     expect(prompt).not.toMatch(/ilk yanıtın.*Merhabalar efendim/s);
+  });
+
+  // Merchant-requested, repeatedly: "S.A dersem Aselam desin" — reciprocate
+  // an Islamic greeting instead of the default "Merhabalar efendim".
+  it.each(["S.A", "s.a", "SA", "Selamünaleyküm", "selamun aleyküm", "Esselamu aleyküm efendim"])(
+    "detects %j as an Islamic greeting",
+    (text) => {
+      expect(detectIslamicGreeting(text)).toBe(true);
+    }
+  );
+
+  it.each(["Sabah 10'da açık mısınız", "satış yapıyor musunuz", "5 kg hurma ne kadar"])(
+    "does not false-positive on %j",
+    (text) => {
+      expect(detectIslamicGreeting(text)).toBe(false);
+    }
+  );
+
+  it("replies 'Aleyküm selam' instead of the default greeting when the customer opened with one", () => {
+    const prompt = buildCustomerPrompt({
+      storeName: "Test",
+      isFirstTurn: true,
+      customerGreetedIslamic: true,
+    });
+    expect(prompt).toContain("'Aleyküm selam.' ile başla");
+    expect(prompt).toContain("'Merhabalar efendim' YAZMA");
+  });
+});
+
+describe("response length", () => {
+  it("instructs the agent to keep replies short", () => {
+    // Merchant-requested, repeatedly: "çok uzatmasın konuşmaları".
+    const prompt = buildCustomerPrompt({ storeName: "Test" });
+    expect(prompt).toContain("KISA tut");
   });
 });

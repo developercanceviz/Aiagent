@@ -24,6 +24,24 @@ export interface PromptContext {
    * lib/ai/customer-agent.ts.
    */
   isFirstTurn?: boolean;
+  /**
+   * True when the customer opened with an Islamic greeting ("Selamünaleyküm",
+   * "S.A", "Esselamu aleyküm", ...) — decided in code (see
+   * detectIslamicGreeting in lib/ai/customer-agent.ts) for the same reason
+   * isFirstTurn is: reliably matching a reciprocal greeting is a keyword
+   * check, not something worth leaving to the model's judgment on every turn.
+   */
+  customerGreetedIslamic?: boolean;
+}
+
+/** "S.A", "s.a", "Selamünaleyküm", "Esselamu aleyküm", ... at the start of a
+ *  message — merchant-requested: reply "Aleyküm selam", not the default
+ *  "Merhabalar efendim". */
+const ISLAMIC_GREETING_RE =
+  /^\s*(s\.?\s*a\.?\b|essel[aâ]m[uü]?n?\s*[uü]?\s*aleyk[uü]m|selam[uü]n?\s*aleyk[uü]m)/i;
+
+export function detectIslamicGreeting(text: string): boolean {
+  return ISLAMIC_GREETING_RE.test(text);
 }
 
 /**
@@ -42,6 +60,9 @@ export interface PromptContext {
  */
 const BUSINESS_RULES = [
   "İŞ KURALLARI:",
+  "- Yanıtları KISA tut — genelde 2-4 cümle yeterlidir. Aynı bilgiyi farklı cümlelerle tekrar etme, gereksiz",
+  "  giriş/nezaket cümleleri ekleme, konuşmayı uzatma; doğrudan soruya cevap ver. Mağaza sahibinin sürekli",
+  "  tekrarladığı bir talep budur.",
   "- Müşterinin daha önce verdiği bilgiyi (ad, sipariş no, sebep vb.) tekrar sorma.",
   "- İndirim oranı, ücret iadesi zamanı, kesin teslimat tarihi ve stok konusunda doğrulanmamış söz verme;",
   "  'hemen dönüş yapılacak' gibi kesin zaman ifadesi kullanma. Mesai dışı gelen taleplerde müşteri",
@@ -89,11 +110,20 @@ const BUSINESS_RULES = [
  * conditional rule the model must evaluate against the message list, removed
  * the failure in the same test conversation.
  */
-function greetingInstruction(isFirstTurn: boolean): string {
-  return isFirstTurn
-    ? "KARŞILAMA: Bu konuşmadaki ilk yanıtın. Yanıtına 'Merhabalar efendim.' ile başla."
-    : "KARŞILAMA: Bu konuşmada müşteriye daha önce yanıt verildi. Yeniden selamlama yapma " +
-        "('Merhabalar efendim.' veya benzeri YAZMA) — soruya doğrudan cevap ver.";
+function greetingInstruction(isFirstTurn: boolean, customerGreetedIslamic: boolean): string {
+  if (!isFirstTurn) {
+    return (
+      "KARŞILAMA: Bu konuşmada müşteriye daha önce yanıt verildi. Yeniden selamlama yapma " +
+      "('Merhabalar efendim.' veya benzeri YAZMA) — soruya doğrudan cevap ver."
+    );
+  }
+  if (customerGreetedIslamic) {
+    return (
+      "KARŞILAMA: Bu konuşmadaki ilk yanıtın. Müşteri 'Selamünaleyküm' (veya kısaca 'S.A') diye selam verdi — " +
+      "yanıtına 'Aleyküm selam.' ile başla, 'Merhabalar efendim' YAZMA."
+    );
+  }
+  return "KARŞILAMA: Bu konuşmadaki ilk yanıtın. Yanıtına 'Merhabalar efendim.' ile başla.";
 }
 
 export function buildCustomerPrompt(ctx: PromptContext): string {
@@ -103,7 +133,7 @@ export function buildCustomerPrompt(ctx: PromptContext): string {
 
   return [
     persona,
-    greetingInstruction(ctx.isFirstTurn ?? true),
+    greetingInstruction(ctx.isFirstTurn ?? true, ctx.customerGreetedIslamic ?? false),
     ctx.corrections?.length
       ? [
           "ONAYLANMIŞ DÜZELTMELER — EN YÜKSEK ÖNCELİK.",
