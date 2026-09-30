@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
-import type { InboundMessage } from "@/lib/channels/types";
+import type { ChannelType, InboundMessage } from "@/lib/channels/types";
+import type { ChannelCredentials } from "@/lib/db/channel";
 
 const GRAPH_VERSION = "v21.0";
 export const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`;
@@ -44,6 +45,38 @@ export function handleMetaVerification(params: URLSearchParams): string | null {
     return challenge;
   }
   return null;
+}
+
+/**
+ * Instagram DM / Messenger webhooks (unlike WhatsApp's) carry no profile name
+ * inline — only the sender's platform-scoped id. Fetching it is a separate
+ * Graph API call, made once per conversation right after it's created (see
+ * app/api/webhooks/meta/route.ts); a failure here must never block message
+ * processing, so this always resolves rather than throwing.
+ */
+export async function fetchSenderProfile(
+  channelType: ChannelType,
+  senderExtId: string,
+  creds: ChannelCredentials
+): Promise<{ name: string } | null> {
+  const token = creds.accessToken;
+  if (!token) return null;
+  const base = creds.apiBase === "instagram" ? IG_GRAPH_BASE : GRAPH_BASE;
+  // Instagram: `username` is the @handle people actually recognize; `name`
+  // is the account's display name and is often unset. Prefer whichever is
+  // set, username first. Messenger only ever returns `name`.
+  const fields = channelType === "INSTAGRAM" ? "name,username" : "name";
+  try {
+    const res = await fetch(
+      `${base}/${senderExtId}?fields=${fields}&access_token=${encodeURIComponent(token)}`
+    );
+    if (!res.ok) return null;
+    const data = (await res.json()) as { name?: string; username?: string };
+    const name = channelType === "INSTAGRAM" ? data.username || data.name : data.name;
+    return name ? { name } : null;
+  } catch {
+    return null;
+  }
 }
 
 /**

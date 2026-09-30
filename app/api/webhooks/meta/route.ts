@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import {
+  fetchSenderProfile,
   handleMetaVerification,
   normalizeMetaPayload,
   verifyMetaSignature,
 } from "@/lib/channels/meta/base";
-import { findChannelByExternalId } from "@/lib/db/channel";
-import { findOrCreateConversation, appendMessage } from "@/lib/db/conversation";
+import { findChannelByExternalId, getChannelCredentials } from "@/lib/db/channel";
+import {
+  appendMessage,
+  findOrCreateConversation,
+  setConversationCustomerName,
+} from "@/lib/db/conversation";
 import { enqueue } from "@/lib/queue";
 
 /**
@@ -48,6 +53,23 @@ export async function POST(req: NextRequest) {
       customerExtId: msg.senderExtId,
       customerName: msg.senderName,
     });
+
+    // Instagram DM / Messenger carry no profile name in the webhook payload
+    // itself (unlike WhatsApp) — every conversation showed up in the panel
+    // as just a channel icon and a relative time, with no way to tell who
+    // it was. Resolve it once via Graph and persist it; a failure here (no
+    // permission, rate limit) must never block the message itself.
+    if (
+      !conversation.customerName &&
+      (msg.channelType === "INSTAGRAM" || msg.channelType === "MESSENGER")
+    ) {
+      const creds = await getChannelCredentials(channel.id);
+      const profile = creds && (await fetchSenderProfile(msg.channelType, msg.senderExtId, creds));
+      if (profile) {
+        await setConversationCustomerName(conversation.id, profile.name);
+        conversation.customerName = profile.name;
+      }
+    }
 
     await appendMessage({
       conversationId: conversation.id,

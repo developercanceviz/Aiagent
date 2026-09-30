@@ -34,6 +34,15 @@ export async function findOrCreateConversation(args: {
   });
 }
 
+/** Set once a Meta profile-name lookup resolves (see webhooks/meta/route.ts);
+ *  a conversation that already has a name is left alone. */
+export async function setConversationCustomerName(id: string, name: string) {
+  await prisma.conversation.updateMany({
+    where: { id, customerName: null },
+    data: { customerName: name },
+  });
+}
+
 export async function appendMessage(args: {
   conversationId: string;
   role: MsgRole;
