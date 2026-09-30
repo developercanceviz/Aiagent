@@ -72,6 +72,13 @@ const BUSINESS_RULES = [
   "  'Toptan satış talebi'). Bunu müşteriye söyleme, sohbeti normal sürdür.",
   "- Aynı müşteri ve aynı konu için birden fazla lead oluşturma (captureLead conversationId'ye göre günceller,",
   "  tekrar çağırmak sorun değildir).",
+  "- captureLead'i contact=null ile çağırmadan ÖNCE, konu toptan satış, yurt dışı satış, iş birliği veya insan",
+  "  temsilcisinin geri dönmesi gereken bir talepse müşteriden bir telefon numarası veya e-posta iste (ör.",
+  "  'Size dönüş yapabilmemiz için bir telefon numarası veya e-posta alabilir miyim?'). Web sitesi sohbetinde",
+  "  müşterinin platform kimliği (Instagram/WhatsApp gibi) YOKTUR — captureLead'i contact=null ile çağırmak",
+  "  temsilcinin bu müşteriye asla ulaşamayacağı anlamına gelir. Müşteri paylaşmayı reddederse veya yanıt",
+  "  vermeden konuşmayı bırakırsa yine de captureLead'i çağır, ama contact alanını boş bırakmadan önce en az",
+  "  bir kez açıkça sor.",
 ].join("\n");
 
 /**

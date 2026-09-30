@@ -14,7 +14,18 @@ const BOARD_ORDER = [{ orderPosition: "asc" as const }, { createdAt: "desc" as c
 
 export async function listLeads(merchantId: string) {
   if (!isConfigured.database()) return [];
-  return prisma.lead.findMany({ where: { merchantId }, orderBy: BOARD_ORDER });
+  return prisma.lead.findMany({
+    where: { merchantId },
+    orderBy: BOARD_ORDER,
+    // Who/where this lead actually came from — a lead the AI captured mid-chat
+    // often has no typed-out contact ("adamın Instagram adresi yok"), but the
+    // conversation it's tied to always carries the real channel identity.
+    include: {
+      conversation: {
+        select: { channelType: true, customerExtId: true, customerName: true },
+      },
+    },
+  });
 }
 
 /** One below the current top of a column, so the card sorts first. */

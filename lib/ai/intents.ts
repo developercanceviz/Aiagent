@@ -113,7 +113,7 @@ export async function applyIntentRules(args: {
   const [conversation, existing] = await Promise.all([
     prisma.conversation.findUnique({
       where: { id: args.conversationId },
-      select: { customerName: true, customerExtId: true, merchantId: true },
+      select: { customerName: true, customerExtId: true, channelType: true, merchantId: true },
     }),
     prisma.lead.findUnique({
       where: { conversationId: args.conversationId },
@@ -134,7 +134,11 @@ export async function applyIntentRules(args: {
         merchantId: args.merchantId,
         conversationId: args.conversationId,
         name: conversation.customerName?.trim() || "İade talebi",
-        contact: conversation.customerExtId,
+        // customerExtId is a real, reachable identity (WhatsApp number,
+        // Instagram-scoped id) on every channel except WEBCHAT, where it's
+        // just an anonymous per-session uuid — showing that as "İletişim"
+        // read as a contact method that silently wasn't one.
+        contact: conversation.channelType === "WEBCHAT" ? null : conversation.customerExtId,
         stage: rule.stage,
         note: rule.note,
         orderPosition: await topPosition(args.merchantId, rule.stage),

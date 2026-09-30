@@ -18,6 +18,7 @@ import {
 } from "@/components/inbox/correct-answer-dialog";
 import { getCorrectedMessageIds } from "@/lib/actions/knowledge";
 import {
+  getConversationById,
   getInboxConversations,
   getThread,
   sendHumanMessage,
@@ -27,7 +28,14 @@ import {
   type InboxMessageDTO,
 } from "@/lib/actions/conversation";
 
-export function InboxView({ initial }: { initial: InboxConversationDTO[] }) {
+export function InboxView({
+  initial,
+  initialConversationId,
+}: {
+  initial: InboxConversationDTO[];
+  /** Deep-link target, e.g. opened via "sohbete git" from a CRM lead card. */
+  initialConversationId?: string;
+}) {
   const { t } = useI18n();
   const [filter, setFilter] = React.useState<
     "all" | "instagram" | "whatsapp" | "live" | "test"
@@ -42,7 +50,9 @@ export function InboxView({ initial }: { initial: InboxConversationDTO[] }) {
       .catch(() => {});
   }, []);
   const [conversations, setConversations] = React.useState(initial);
-  const [activeId, setActiveId] = React.useState<string | null>(initial[0]?.id ?? null);
+  const [activeId, setActiveId] = React.useState<string | null>(
+    initialConversationId ?? initial[0]?.id ?? null
+  );
   const [thread, setThread] = React.useState<InboxMessageDTO[]>([]);
   const [draft, setDraft] = React.useState("");
   const [, startTransition] = React.useTransition();
@@ -81,6 +91,23 @@ export function InboxView({ initial }: { initial: InboxConversationDTO[] }) {
       alive = false;
     };
   }, [activeId]);
+
+  // Deep-link target (e.g. "sohbete git" from a CRM lead card) may be older
+  // than the inbox's most-recent-100 window, so it might not be in the list
+  // this page server-rendered — fetch it directly and splice it in.
+  React.useEffect(() => {
+    if (!initialConversationId) return;
+    if (conversations.some((c) => c.id === initialConversationId)) return;
+    let alive = true;
+    getConversationById(initialConversationId).then((c) => {
+      if (alive && c) setConversations((prev) => [c, ...prev]);
+    });
+    return () => {
+      alive = false;
+    };
+    // Only ever runs for the deep-link target on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialConversationId]);
 
   const active = conversations.find((c) => c.id === activeId) ?? null;
 

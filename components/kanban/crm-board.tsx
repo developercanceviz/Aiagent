@@ -13,6 +13,7 @@ import {
 import {
   AlertTriangle,
   Check,
+  ExternalLink,
   LayoutGrid,
   MessageSquare,
   Pencil,
@@ -23,12 +24,14 @@ import {
   Users,
   X,
 } from "lucide-react";
+import Link from "next/link";
 
-import { cn } from "@/lib/utils";
+import { cn, relativeTimeTR } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n/provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ChannelIcon, type ChannelKind } from "@/components/channel-icon";
 import {
   Dialog,
   DialogContent,
@@ -137,7 +140,13 @@ export function CrmBoard({ state }: { state: LeadBoardState }) {
   const submitDraft = (draft: LeadDraft) => {
     if (editing === "new") {
       const tempId = `tmp-${crypto.randomUUID()}`;
-      const optimistic: LeadDTO = { id: tempId, conversationId: null, ...draft };
+      const optimistic: LeadDTO = {
+        id: tempId,
+        conversationId: null,
+        createdAt: new Date().toISOString(),
+        source: null,
+        ...draft,
+      };
       setLeads((prev) => [optimistic, ...prev]);
       run(
         async () => {
@@ -275,6 +284,7 @@ export function CrmBoard({ state }: { state: LeadBoardState }) {
                 stage={stage}
                 label={tc.stages[stage]}
                 emptyLabel={tc.empty}
+                goToConversationLabel={tc.goToConversation}
                 dot={stageDot[stage]}
                 leads={visible.filter((l) => l.stage === stage)}
                 onEdit={setEditing}
@@ -423,6 +433,7 @@ function Column({
   stage,
   label,
   emptyLabel,
+  goToConversationLabel,
   dot,
   leads,
   onEdit,
@@ -431,6 +442,7 @@ function Column({
   stage: LeadStageKey;
   label: string;
   emptyLabel: string;
+  goToConversationLabel: string;
   dot: string;
   leads: LeadDTO[];
   onEdit: (lead: LeadDTO) => void;
@@ -462,7 +474,13 @@ function Column({
           </div>
         ) : (
           leads.map((lead) => (
-            <Card key={lead.id} lead={lead} onEdit={onEdit} onDelete={onDelete} />
+            <Card
+              key={lead.id}
+              lead={lead}
+              onEdit={onEdit}
+              onDelete={onDelete}
+              goToConversationLabel={goToConversationLabel}
+            />
           ))
         )}
       </div>
@@ -474,10 +492,12 @@ function Card({
   lead,
   onEdit,
   onDelete,
+  goToConversationLabel,
 }: {
   lead: LeadDTO;
   onEdit: (lead: LeadDTO) => void;
   onDelete: (lead: LeadDTO) => void;
+  goToConversationLabel: string;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: lead.id,
@@ -504,8 +524,8 @@ function Card({
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium">{lead.name}</p>
-          {lead.contact && (
-            <p className="truncate text-xs text-muted-foreground">{lead.contact}</p>
+          {leadIdentity(lead) && (
+            <p className="truncate text-xs text-muted-foreground">{leadIdentity(lead)}</p>
           )}
         </div>
         <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
@@ -534,8 +554,10 @@ function Card({
 
       {(lead.tags.length > 0 || lead.conversationId) && (
         <div className="mt-1.5 flex flex-wrap items-center gap-1">
-          {lead.conversationId && (
-            <MessageSquare className="size-3 text-muted-foreground/70" />
+          {lead.source ? (
+            <ChannelIcon kind={lead.source.channel as ChannelKind} size="sm" className="size-4" />
+          ) : (
+            lead.conversationId && <MessageSquare className="size-3 text-muted-foreground/70" />
           )}
           {lead.tags.map((tag) => (
             <span
@@ -547,8 +569,40 @@ function Card({
           ))}
         </div>
       )}
+
+      <div className="mt-1.5 flex items-center justify-between gap-2">
+        {/* "hangi tarihte düştü" — when this lead actually landed, not just
+            "recently" — used to be nowhere in the UI even though
+            Lead.createdAt was always in the DB. */}
+        <p className="text-[10px] text-muted-foreground/60">
+          {relativeTimeTR(lead.createdAt)}
+        </p>
+        {/* "kim tarafından düştü" — a webchat visitor often has no real
+            contact info at all; the one reliable way to find out who's
+            asking is to read the actual chat. */}
+        {lead.conversationId && (
+          <Link
+            href={`/mesajlar?conversation=${lead.conversationId}`}
+            onPointerDown={stop}
+            className="flex items-center gap-0.5 text-[10px] font-medium text-brand-700 hover:underline"
+          >
+            <ExternalLink className="size-2.5" /> {goToConversationLabel}
+          </Link>
+        )}
+      </div>
     </div>
   );
+}
+
+/** Best identity we have for this lead: what was typed in chat, else the
+ *  conversation's own platform identity (real WhatsApp number / IG name).
+ *  Webchat's customerExtId is just an anonymous per-session uuid — showing
+ *  it here would look like a contact method when it isn't one. */
+function leadIdentity(lead: LeadDTO): string | null {
+  if (lead.contact) return lead.contact;
+  if (!lead.source) return null;
+  if (lead.source.customerName) return lead.source.customerName;
+  return lead.source.channel === "webchat" ? null : lead.source.customerExtId;
 }
 
 function TableView({
@@ -573,13 +627,14 @@ function TableView({
             <th className="px-4 py-3 font-medium">{labels.columns.contact}</th>
             <th className="px-4 py-3 font-medium">{labels.columns.tags}</th>
             <th className="px-4 py-3 font-medium">{labels.columns.stage}</th>
+            <th className="px-4 py-3 font-medium">{labels.columns.date}</th>
             <th className="w-20 px-4 py-3" />
           </tr>
         </thead>
         <tbody>
           {leads.length === 0 ? (
             <tr>
-              <td colSpan={5} className="px-4 py-10 text-center text-muted-foreground">
+              <td colSpan={6} className="px-4 py-10 text-center text-muted-foreground">
                 {labels.empty}
               </td>
             </tr>
@@ -588,13 +643,17 @@ function TableView({
               <tr key={l.id} className="border-t border-border/40 hover:bg-accent/40">
                 <td className="px-4 py-3 font-medium">
                   <span className="flex items-center gap-1.5">
-                    {l.conversationId && (
-                      <MessageSquare className="size-3 shrink-0 text-muted-foreground/70" />
+                    {l.source ? (
+                      <ChannelIcon kind={l.source.channel as ChannelKind} size="sm" className="size-4 shrink-0" />
+                    ) : (
+                      l.conversationId && (
+                        <MessageSquare className="size-3 shrink-0 text-muted-foreground/70" />
+                      )
                     )}
                     {l.name}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-muted-foreground">{l.contact ?? "—"}</td>
+                <td className="px-4 py-3 text-muted-foreground">{leadIdentity(l) ?? "—"}</td>
                 <td className="px-4 py-3">
                   {l.tags.length === 0 ? (
                     <span className="text-muted-foreground">—</span>
@@ -623,8 +682,21 @@ function TableView({
                     ))}
                   </select>
                 </td>
+                <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">
+                  {relativeTimeTR(l.createdAt)}
+                </td>
                 <td className="px-4 py-3">
                   <div className="flex items-center justify-end gap-1">
+                    {l.conversationId && (
+                      <Link
+                        href={`/mesajlar?conversation=${l.conversationId}`}
+                        className="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+                        aria-label={labels.goToConversation}
+                        title={labels.goToConversation}
+                      >
+                        <ExternalLink className="size-3.5" />
+                      </Link>
+                    )}
                     <button
                       onClick={() => onEdit(l)}
                       className="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
@@ -692,7 +764,15 @@ function LeadDialog({
         <DialogHeader>
           <DialogTitle>{isNew ? labels.form.newTitle : labels.form.editTitle}</DialogTitle>
           {lead?.conversationId && (
-            <DialogDescription>{labels.form.fromConversation}</DialogDescription>
+            <DialogDescription className="flex flex-wrap items-center gap-1.5">
+              {labels.form.fromConversation}
+              <Link
+                href={`/mesajlar?conversation=${lead.conversationId}`}
+                className="flex items-center gap-0.5 font-medium text-brand-700 hover:underline"
+              >
+                <ExternalLink className="size-3" /> {labels.goToConversation}
+              </Link>
+            </DialogDescription>
           )}
         </DialogHeader>
 

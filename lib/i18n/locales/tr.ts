@@ -80,7 +80,15 @@ export const tr = {
       OLUMLU: "OLUMLU",
       OLUMSUZ: "OLUMSUZ",
     },
-    columns: { name: "Ad", contact: "İletişim", stage: "Aşama", tags: "Etiketler", actions: "" },
+    columns: {
+      name: "Ad",
+      contact: "İletişim",
+      stage: "Aşama",
+      tags: "Etiketler",
+      actions: "",
+      date: "Tarih",
+    },
+    goToConversation: "Sohbete git",
     form: {
       newTitle: "Yeni Lead",
       editTitle: "Lead'i Düzenle",

@@ -10,6 +10,18 @@ export interface LeadDTO {
   tags: string[];
   /** Set when the lead was captured by the AI from a conversation. */
   conversationId: string | null;
+  createdAt: string;
+  /**
+   * The conversation's own channel identity (customerExtId is the real
+   * WhatsApp number / Instagram-scoped id; customerName is the platform
+   * display name). Null for manually-added leads with no linked conversation.
+   * Shown as a fallback when `contact` above was never typed out in the chat.
+   */
+  source: {
+    channel: string;
+    customerExtId: string;
+    customerName: string | null;
+  } | null;
 }
 
 /** Board data plus whether we could resolve a tenant at all. */

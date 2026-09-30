@@ -53,6 +53,13 @@ export async function appendMessage(args: {
   return message;
 }
 
+/** Single-row lookup by id, tenant-scoped — used to deep-link into a
+ *  specific conversation (e.g. from a CRM lead card) regardless of whether
+ *  it still falls inside the inbox's most-recent-100 window. */
+export async function getConversationById(merchantId: string, id: string) {
+  return prisma.conversation.findFirst({ where: { id, merchantId } });
+}
+
 export async function getConversationHistory(conversationId: string, limit = 20) {
   return prisma.message.findMany({
     where: { conversationId },

@@ -6,6 +6,7 @@ import { isConfigured } from "@/lib/config/env";
 import { getCurrentMerchantId } from "@/lib/auth/session";
 import {
   appendMessage,
+  getConversationById as getConversationRow,
   getConversationHistory,
   listConversations,
   setHandledBy,
@@ -58,6 +59,28 @@ export async function getInboxConversations(
     unread: r.unreadCount,
     handledBy: r.handledBy,
   }));
+}
+
+/** Deep-link target: fetch one conversation by id regardless of whether it
+ *  falls inside the inbox's most-recent-100 window (e.g. opened from a CRM
+ *  lead card's "sohbete git" link). */
+export async function getConversationById(
+  id: string
+): Promise<InboxConversationDTO | null> {
+  if (!isConfigured.database()) return null;
+  const merchantId = await getCurrentMerchantId();
+  if (!merchantId) return null;
+  const r = await getConversationRow(merchantId, id);
+  if (!r) return null;
+  return {
+    id: r.id,
+    name: r.customerName ?? "Müşteri",
+    preview: "",
+    time: r.lastMessageAt.toISOString(),
+    channel: r.channelType.toLowerCase(),
+    unread: r.unreadCount,
+    handledBy: r.handledBy,
+  };
 }
 
 export async function getThread(conversationId: string): Promise<InboxMessageDTO[]> {

@@ -37,6 +37,14 @@ function toDTO(r: Row): LeadDTO {
     stage: r.stage as LeadStageKey,
     tags: r.tags,
     conversationId: r.conversationId,
+    createdAt: r.createdAt.toISOString(),
+    source: r.conversation
+      ? {
+          channel: r.conversation.channelType.toLowerCase(),
+          customerExtId: r.conversation.customerExtId,
+          customerName: r.conversation.customerName,
+        }
+      : null,
   };
 }
 
@@ -71,8 +79,8 @@ export async function addLead(
   revalidatePath("/crm");
   // The real row goes back to the client so the optimistic card can adopt its
   // id — otherwise the card keeps a client-generated uuid and the next drag
-  // updates nothing.
-  return { ok: true, lead: toDTO(row) };
+  // updates nothing. Manually-added leads never have a conversation link.
+  return { ok: true, lead: toDTO({ ...row, conversation: null }) };
 }
 
 export async function moveLeadAction(
