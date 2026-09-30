@@ -8,13 +8,26 @@ import {
 } from "@/lib/supabase/client";
 
 /**
- * Subscribe to conversation/message changes via Supabase Realtime and invoke
- * `onChange` so the inbox can refresh. No-op when Supabase isn't configured, so
- * the inbox still works on mock data.
+ * Subscribe to conversation/message changes via Supabase Realtime.
+ *
+ * `onListChange` fires on any conversation-row change or new message, so the
+ * left-hand list (ordering, unread count, preview) stays live. `onMessageInsert`
+ * fires separately with the inserted message's conversationId: the open thread
+ * pane only ever fetches on activeId *changing* (see InboxView), so without
+ * this, a message that arrives while its conversation is already open just
+ * sits invisible until the merchant clicks away and back — this is what read
+ * as "the AI replies on Instagram but nothing shows up in the panel": the
+ * reply was saved and sent, the open thread just never re-fetched it.
+ * No-op when Supabase isn't configured, so the inbox still works on mock data.
  */
-export function useConversationsRealtime(onChange: () => void) {
-  const cb = React.useRef(onChange);
-  cb.current = onChange;
+export function useConversationsRealtime(
+  onListChange: () => void,
+  onMessageInsert?: (conversationId: string) => void
+) {
+  const listCb = React.useRef(onListChange);
+  listCb.current = onListChange;
+  const msgCb = React.useRef(onMessageInsert);
+  msgCb.current = onMessageInsert;
 
   React.useEffect(() => {
     if (!supabaseConfiguredOnClient) return;
@@ -22,10 +35,19 @@ export function useConversationsRealtime(onChange: () => void) {
     const channel = supabase
       .channel("inbox")
       .on("postgres_changes", { event: "*", schema: "public", table: "conversations" }, () =>
-        cb.current()
+        listCb.current()
       )
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, () =>
-        cb.current()
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "messages" },
+        (payload) => {
+          listCb.current();
+          const row = payload.new as Record<string, unknown> | undefined;
+          const conversationId = (row?.conversationId ?? row?.conversation_id) as
+            | string
+            | undefined;
+          if (conversationId) msgCb.current?.(conversationId);
+        }
       )
       .subscribe();
 

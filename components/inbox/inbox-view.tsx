@@ -63,7 +63,19 @@ export function InboxView({
   const refresh = React.useCallback(() => {
     startTransition(async () => setConversations(await getInboxConversations(dbFilter)));
   }, [dbFilter]);
-  useConversationsRealtime(refresh);
+  // A message arriving for the conversation currently open in the thread
+  // pane must refetch that thread too — the AI's reply is saved and sent to
+  // the customer within seconds, but the pane doesn't observe the DB on its
+  // own; it only fetches when `activeId` changes. Without this, a reply to
+  // an already-open conversation is real (the customer gets it on
+  // Instagram/WhatsApp) but sits invisible here until the merchant clicks
+  // away and back — this was read as "the AI answers but it's not showing
+  // up in the panel."
+  useConversationsRealtime(refresh, (conversationId) => {
+    if (conversationId === activeId) {
+      getThread(conversationId).then(setThread);
+    }
+  });
 
   // Re-fetch from the server whenever the active tab changes. Previously the
   // tabs filtered the single "most recent 100 overall" list client-side —
