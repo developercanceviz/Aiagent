@@ -110,15 +110,25 @@ export class IkasAdapter implements CommerceAdapter {
   ): Promise<NormalizedOrder | null> {
     if (!verifier.email && !verifier.phone) return null;
 
+    // ikas's orderNumber filter is a case-sensitive exact match — confirmed
+    // live: "cch43102" returns zero rows while "CCH43102" finds the order.
+    // A real customer typed the lowercase form, got told their real,
+    // delivered order "wasn't found", and had no way to know why. Order
+    // numbers are always uppercase on ikas's side, so normalize before the
+    // query (and compare case-insensitively below as a second safety net).
+    const normalized = orderNumber.trim().toUpperCase();
+
     // Direct server-side lookup — scanning pages can never work against tens
     // of thousands of oldest-first orders. Ownership is PROVEN against the
     // same response's customer contact before anything is returned (no
     // cross-customer leakage).
     const data = await this.gql<{ listOrder: ListResult<RawOrder> }>(LIST_ORDERS, {
       pagination: { page: 1, limit: 5 },
-      orderNumber: { eq: orderNumber },
+      orderNumber: { eq: normalized },
     });
-    const raw = data.listOrder.data.find((o) => o.orderNumber === orderNumber);
+    const raw = data.listOrder.data.find(
+      (o) => o.orderNumber?.toUpperCase() === normalized
+    );
     if (!raw) return null;
 
     const email = raw.customer?.email?.toLowerCase().trim();
