@@ -108,14 +108,16 @@ function buildCommerceTools(
   return {
     searchProducts: tool({
       description:
-        "Mağaza ürünlerinde arama yapar; isim, fiyat (aktif kampanya varsa indirimli fiyat) ve stok döndürür.",
+        "Mağaza ürünlerinde arama yapar; isim, fiyat (aktif kampanya varsa indirimli fiyat) ve stok durumu döndürür.",
       parameters: z.object({ query: z.string().min(1) }),
       execute: async ({ query }) => {
         const products = await ctx.adapter.searchProducts(query);
         // price is always the effective (discounted, if a campaign is active)
-        // price — never quote compareAtPrice as the price to pay.
+        // price — never quote compareAtPrice as the price to pay. No id/SKU
+        // and no exact stock count here — merchant request: customers should
+        // never hear an internal product code or a real stock figure, only
+        // whether it's available.
         return products.slice(0, 5).map((p) => ({
-          id: p.id,
           name: p.name,
           price: formatTRY(p.price.amount),
           ...(p.compareAtPrice
@@ -124,19 +126,10 @@ function buildCommerceTools(
                 kampanyaNotu: "Bu ürün şu an indirimde; 'price' ödenecek indirimli fiyat, 'normalFiyat' indirimsiz liste fiyatıdır.",
               }
             : {}),
-          stock: p.stock,
+          stokDurumu: p.stock > 0 ? "Stokta var" : "Stokta yok",
           url: p.url,
         }));
       },
-    }),
-
-    getProductStock: tool({
-      description: "Belirli bir varyantın stok adedini döndürür.",
-      parameters: z.object({ variantId: z.string().min(1) }),
-      execute: async ({ variantId }) => ({
-        variantId,
-        stock: await ctx.adapter.getProductStock(variantId),
-      }),
     }),
 
     getOrderStatus: tool({

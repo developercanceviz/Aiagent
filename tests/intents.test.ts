@@ -121,6 +121,43 @@ describe("hardcoded business facts", () => {
     expect(prompt).toContain("KÜÇÜK BOY KURU İNCİR");
     expect(prompt).toContain("hiçbir bebek/çocuk ürünü YOKTUR");
   });
+
+  it("states orders always ship same-day", () => {
+    // Merchant correction (2026-10-11): the agent was hedging ("kesin bir
+    // gün veremiyoruz") on a question that has a firm answer.
+    const prompt = buildCustomerPrompt({ storeName: "Test" });
+    expect(prompt).toContain("AYNI GÜN kargoya verilir");
+  });
+
+  it("redirects price-list requests to the website instead of listing every product", () => {
+    const prompt = buildCustomerPrompt({ storeName: "Test" });
+    expect(prompt).toContain("fiyat listesi");
+    expect(prompt).toContain("cancevizhurma.com");
+  });
+});
+
+describe("no internal codes or exact stock counts", () => {
+  it("forbids quoting a product code, SKU, or exact stock figure", () => {
+    // Production incident: the agent read a raw ikas variant id (a uuid, the
+    // SKU-fallback) straight out of a knowledge snippet and quoted it to a
+    // customer as a "Kod:" line, alongside an exact stock count.
+    const prompt = buildCustomerPrompt({ storeName: "Test" });
+    expect(prompt).toContain("SKU");
+    expect(prompt).toContain("tam stok adedini");
+    expect(prompt).toContain("'stokta var' / 'stokta");
+  });
+});
+
+describe("tone", () => {
+  it("instructs shopkeeper phrasing over database-sounding phrasing", () => {
+    const prompt = buildCustomerPrompt({ storeName: "Test" });
+    expect(prompt).toContain("esnaf gibi");
+  });
+
+  it("forbids leading with a hedge/disclaimer before a direct answer", () => {
+    const prompt = buildCustomerPrompt({ storeName: "Test" });
+    expect(prompt).toContain("mazeret/uyarı cümlesiyle");
+  });
 });
 
 describe("greeting instruction", () => {

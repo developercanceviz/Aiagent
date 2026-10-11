@@ -30,19 +30,28 @@ export async function syncProductsToKnowledge(payload: {
       compareAt
         ? `${formatTRY(amount)} (İndirimli fiyat; normal fiyat ${formatTRY(compareAt.amount)})`
         : formatTRY(amount);
+    // Customer-facing: "var"/"yok" only — never the real count (merchant
+    // request). variant.title used to fall back to the raw ikas variant id
+    // when no SKU was set, which the agent then read back verbatim as a
+    // "Kod:" line (seen live: a raw uuid quoted to a customer) — variants
+    // are distinguished by their price line alone now, no id/SKU at all.
+    const stockLabel = (stock: number) => (stock > 0 ? "Stokta var" : "Stokta yok");
 
     const items = page.data.map((p) => {
-      const variantLines = p.variants
-        .map(
-          (v) =>
-            `${v.title}: ${priceLine(v.price.amount, v.price.currency, v.compareAtPrice)} (stok: ${v.stock})`
-        )
-        .join("\n");
+      const variantLines =
+        p.variants.length > 1
+          ? p.variants
+              .map(
+                (v) =>
+                  `- ${priceLine(v.price.amount, v.price.currency, v.compareAtPrice)} (${stockLabel(v.stock)})`
+              )
+              .join("\n")
+          : "";
       const content = [
         p.name,
         p.description ?? "",
         `Fiyat: ${priceLine(p.price.amount, p.price.currency, p.compareAtPrice)}`,
-        `Toplam stok: ${p.stock}`,
+        `Stok durumu: ${stockLabel(p.stock)}`,
         variantLines,
         p.url ?? "",
       ]
