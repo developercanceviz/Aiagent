@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db/client";
 import { isConfigured } from "@/lib/config/env";
 import { getMerchantAdapter } from "@/lib/db/merchant";
-import { upsertKnowledgeItem } from "@/lib/db/knowledge";
+import { pruneProductKnowledge, upsertKnowledgeItem } from "@/lib/db/knowledge";
 import { embedBatch } from "@/lib/ai/rag";
 import { formatTRY } from "@/lib/utils";
 
@@ -17,6 +17,12 @@ export async function syncProductsToKnowledge(payload: {
   if (!isConfigured.database()) return;
   const { merchantId } = payload;
   const adapter = await getMerchantAdapter(merchantId);
+
+  // Every call does a full catalog pass (there's no single-product payload
+  // shape today), so the ids seen here are authoritative for what should
+  // exist afterward — anything else is a discontinued product whose
+  // knowledge entry would otherwise never get cleaned up.
+  const seenProductIds: string[] = [];
 
   let cursor: string | undefined;
   for (let i = 0; i < 50; i++) {
@@ -60,6 +66,8 @@ export async function syncProductsToKnowledge(payload: {
       return { product: p, content };
     });
 
+    seenProductIds.push(...items.map((it) => it.product.id));
+
     // One embeddings call per page instead of one per product — the per-item
     // path blew the function's time budget on real catalogs.
     let vectors: number[][] = [];
@@ -96,5 +104,10 @@ export async function syncProductsToKnowledge(payload: {
 
     if (!page.hasNextPage) break;
     cursor = page.cursor;
+  }
+
+  const pruned = await pruneProductKnowledge(merchantId, seenProductIds);
+  if (pruned > 0) {
+    console.log(`[sync-products] pruned ${pruned} discontinued product(s) from knowledge base`);
   }
 }

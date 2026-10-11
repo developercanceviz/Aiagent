@@ -78,3 +78,26 @@ export async function listKnowledgeItems(merchantId: string, type?: KbType) {
 export async function deleteKnowledgeItem(merchantId: string, id: string) {
   await prisma.knowledgeItem.deleteMany({ where: { id, merchantId } });
 }
+
+/**
+ * Remove PRODUCT knowledge items whose source product is no longer in the
+ * catalog — a full `syncProductsToKnowledge` run only ever upserts what
+ * `listProducts` currently returns, so a discontinued product's entry
+ * otherwise sits there forever (seen live: 15 products deleted from ikas
+ * back in July still had stale entries today, including the raw-variant-id
+ * leak a re-sync of *current* products can no longer touch). Call once after
+ * a full catalog pass with every sourceRef seen in it.
+ */
+export async function pruneProductKnowledge(
+  merchantId: string,
+  keepSourceRefs: string[]
+): Promise<number> {
+  // An empty list almost certainly means the catalog fetch came back empty
+  // (error, misconfigured adapter) rather than a genuinely empty store —
+  // never wipe every product entry on that basis.
+  if (keepSourceRefs.length === 0) return 0;
+  const res = await prisma.knowledgeItem.deleteMany({
+    where: { merchantId, type: "PRODUCT", sourceRef: { notIn: keepSourceRefs } },
+  });
+  return res.count;
+}
