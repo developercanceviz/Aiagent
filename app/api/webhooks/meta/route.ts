@@ -19,7 +19,18 @@ import { enqueue } from "@/lib/queue";
  * GET = subscription verification handshake. POST = verify signature →
  * normalize per channel → resolve tenant from the receiving channel id →
  * persist inbound → enqueue the agent turn (which sends the reply back out).
+ *
+ * QStash isn't configured in this deployment, so enqueue() falls back to the
+ * inline driver: the agent turn (LLM call + tool calls + the Meta send) runs
+ * via next/server's after(), inside THIS SAME invocation, after the 200 OK
+ * is returned. Without raising the duration here it was silently killed by
+ * Vercel's short default on nearly every inbound message — confirmed live:
+ * 2,830 of 2,930 Instagram conversations during the window AI was on have a
+ * saved customer message and NO AI reply at all. /api/jobs (the QStash
+ * consumer, same job) already needed this for the same reason; this route
+ * just never got it.
  */
+export const maxDuration = 300;
 
 export async function GET(req: NextRequest) {
   const challenge = handleMetaVerification(req.nextUrl.searchParams);

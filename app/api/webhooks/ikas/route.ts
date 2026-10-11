@@ -8,7 +8,13 @@ import type { JobName } from "@/lib/queue/types";
 /**
  * ikas webhook receiver: verify signature → map scope to a job → enqueue →
  * ACK fast. Dedupe is delegated to the queue (Upstash-Deduplication-Id).
+ *
+ * QStash isn't configured in this deployment, so enqueue() falls back to the
+ * inline driver, which runs the job inside THIS invocation via after() —
+ * store/product/updated can mean a full catalog resync (lib/jobs/sync-products.ts),
+ * which needs real headroom. Same fix as app/api/webhooks/meta/route.ts.
  */
+export const maxDuration = 300;
 
 const scopeToJob: Record<string, JobName | undefined> = {
   "store/order/created": "ikas.order-changed",
