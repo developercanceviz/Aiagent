@@ -1,8 +1,7 @@
 "use client";
 
-import { Suspense } from "react";
-import { CheckCircle2, Info, Link2, RefreshCw, RotateCcw } from "lucide-react";
-import { useSearchParams } from "next/navigation";
+import * as React from "react";
+import { AlertTriangle, CheckCircle2, Info, Link2, Loader2, RefreshCw, RotateCcw } from "lucide-react";
 
 import { useI18n } from "@/lib/i18n/provider";
 import { Badge } from "@/components/ui/badge";
@@ -15,23 +14,54 @@ const connected: { kind: ChannelKind; name: string; sub: string }[] = [
   { kind: "messenger", name: "Facebook Messenger", sub: "Canceviz hurma · Can Ceviz Müşteri Destek Asistanı" },
 ];
 
-/** Reconnect action per channel kind — only Instagram has a real OAuth flow
- *  today (app/api/auth/instagram/*); WhatsApp/Messenger still go through the
- *  manual paste-a-token form below until the same flow is built for them. */
-function reconnectHref(kind: ChannelKind): string | null {
-  return kind === "instagram" ? "/api/auth/instagram/authorize" : null;
-}
+/**
+ * Instagram's own reconnect — only this channel has a real OAuth flow today
+ * (app/api/auth/instagram/*); WhatsApp/Messenger still use the manual form
+ * below until the same flow is built for them.
+ *
+ * This can't be a plain link: the whole dashboard runs inside ikas's admin
+ * iframe, and Instagram's consent screen refuses to be framed at all
+ * (confirmed live — "refused to connect"). So this fetches the authorize URL
+ * via a same-origin request (which DOES carry the iframe-scoped session
+ * cookie, unlike a cross-context navigation) and opens it in a real new tab.
+ * See signInstagramOAuthState's comment for the full reasoning.
+ */
+function InstagramReconnectButton() {
+  const [state, setState] = React.useState<"idle" | "busy" | "error">("idle");
 
-/** Reads the ?instagram=connected redirect param — isolated in its own
- *  component so only this sliver needs the Suspense boundary useSearchParams
- *  requires on a statically-rendered page, not the whole settings page. */
-function InstagramConnectedBanner() {
-  const searchParams = useSearchParams();
-  if (searchParams.get("instagram") !== "connected") return null;
+  const connect = async () => {
+    setState("busy");
+    try {
+      const res = await fetch("/api/auth/instagram/authorize");
+      const json = (await res.json()) as { url?: string; error?: string };
+      if (!res.ok || !json.url) throw new Error(json.error ?? `HTTP ${res.status}`);
+      window.open(json.url, "_blank", "noopener,noreferrer");
+      setState("idle");
+    } catch {
+      setState("error");
+    }
+  };
+
   return (
-    <div className="flex items-center gap-2.5 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-      <CheckCircle2 className="size-4 shrink-0" />
-      Instagram yeniden bağlandı — yeni bağlantı ~60 gün geçerli.
+    <div className="flex items-center gap-1">
+      {state === "error" && (
+        <span className="flex items-center gap-1 text-[11px] text-red-600" title="Bağlanılamadı, tekrar deneyin">
+          <AlertTriangle className="size-3" />
+        </span>
+      )}
+      <button
+        onClick={connect}
+        disabled={state === "busy"}
+        className="flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent disabled:opacity-50"
+        aria-label="Yeniden bağlan"
+        title="Yeniden bağlan — yeni sekmede Instagram onay ekranı açılır"
+      >
+        {state === "busy" ? (
+          <Loader2 className="size-4 animate-spin" />
+        ) : (
+          <RotateCcw className="size-4" />
+        )}
+      </button>
     </div>
   );
 }
@@ -53,10 +83,6 @@ export default function KanallarPage() {
           </div>
         </div>
       </div>
-
-      <Suspense fallback={null}>
-        <InstagramConnectedBanner />
-      </Suspense>
 
       <div className="flex items-center gap-3 px-1 text-sm text-muted-foreground">
         <span className="flex items-center gap-1.5">
@@ -84,15 +110,8 @@ export default function KanallarPage() {
               </div>
               <p className="truncate text-xs text-muted-foreground">{c.sub}</p>
             </div>
-            {reconnectHref(c.kind) ? (
-              <a
-                href={reconnectHref(c.kind)!}
-                className="flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent"
-                aria-label="Yeniden bağlan"
-                title="Yeniden bağlan"
-              >
-                <RotateCcw className="size-4" />
-              </a>
+            {c.kind === "instagram" ? (
+              <InstagramReconnectButton />
             ) : (
               <button
                 className="flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent"

@@ -5,8 +5,8 @@ import {
   exchangeForLongLivedToken,
   exchangeInstagramCode,
   getInstagramProfile,
+  verifyInstagramOAuthState,
 } from "@/lib/auth/instagram-oauth";
-import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/client";
 import { encryptSecret } from "@/lib/crypto/secrets";
 import type { ChannelCredentials } from "@/lib/db/channel";
@@ -14,8 +14,13 @@ import type { ChannelCredentials } from "@/lib/db/channel";
 /**
  * OAuth callback: validate state → exchange code for a short-lived token →
  * exchange that for a long-lived one (~60 days) → identify the connected IG
- * account → upsert this merchant's INSTAGRAM Channel with the encrypted
- * token + its real expiry. Mirrors app/api/auth/ikas/callback/route.ts.
+ * account → upsert the Channel for the merchant signed into `state` with the
+ * encrypted token + its real expiry. Mirrors
+ * app/api/auth/ikas/callback/route.ts, except the merchant identity comes
+ * from `state` rather than the session cookie — this callback is reached
+ * from a new top-level tab (Instagram refuses to be framed at all), which
+ * doesn't share the ikas-iframe-scoped session cookie. See
+ * signInstagramOAuthState's comment for why.
  */
 export async function GET(req: NextRequest) {
   if (!isConfigured.instagramOAuth()) {
@@ -26,10 +31,6 @@ export async function GET(req: NextRequest) {
   const code = params.get("code");
   const state = params.get("state");
 
-  const session = await getSession();
-  if (!session.merchantId) {
-    return NextResponse.json({ error: "No store in session." }, { status: 401 });
-  }
   if (!code) {
     const errorDescription = params.get("error_description") ?? params.get("error");
     return NextResponse.json(
@@ -37,8 +38,12 @@ export async function GET(req: NextRequest) {
       { status: 400 }
     );
   }
-  if (!state || state !== session.instagramOauthState) {
-    return NextResponse.json({ error: "Invalid OAuth state" }, { status: 400 });
+  const merchantId = state ? verifyInstagramOAuthState(state) : null;
+  if (!merchantId) {
+    return NextResponse.json(
+      { error: "Invalid or expired OAuth state — please try connecting again." },
+      { status: 400 }
+    );
   }
 
   const redirectUri = `${env.deployUrl}/api/auth/instagram/callback`;
@@ -80,7 +85,7 @@ export async function GET(req: NextRequest) {
   const tokenExpiresAt = new Date(Date.now() + longLived.expires_in * 1000);
 
   const existing = await prisma.channel.findFirst({
-    where: { merchantId: session.merchantId, type: "INSTAGRAM" },
+    where: { merchantId, type: "INSTAGRAM" },
     select: { id: true },
   });
   if (existing) {
@@ -97,7 +102,7 @@ export async function GET(req: NextRequest) {
   } else {
     await prisma.channel.create({
       data: {
-        merchantId: session.merchantId,
+        merchantId,
         type: "INSTAGRAM",
         displayName: `@${profile.username}`,
         externalId: profile.id,
@@ -108,8 +113,17 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  session.instagramOauthState = undefined;
-  await session.save();
-
-  return NextResponse.redirect(`${env.deployUrl}/ayarlar/kanallar?instagram=connected`);
+  // This callback landed in a new top-level tab (not the ikas iframe) — show
+  // a real confirmation page here rather than redirecting into /ayarlar,
+  // which would just load the dashboard logged out (no session in this
+  // tab) and confuse more than it helps. The merchant switches back to
+  // their original embedded tab to see the result.
+  return new NextResponse(
+    `<!doctype html><html><head><meta charset="utf-8"><title>Instagram bağlandı</title></head>` +
+      `<body style="font-family:system-ui;max-width:480px;margin:80px auto;text-align:center;color:#111">` +
+      `<h2>✅ Instagram bağlandı</h2>` +
+      `<p>@${profile.username} başarıyla bağlandı. Bu sekmeyi kapatıp panele dönebilirsiniz.</p>` +
+      `</body></html>`,
+    { headers: { "Content-Type": "text/html; charset=utf-8" } }
+  );
 }

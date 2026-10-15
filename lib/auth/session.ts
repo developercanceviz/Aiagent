@@ -11,9 +11,6 @@ export interface AppSession {
   /** CSRF/state for the ikas OAuth round-trip. */
   oauthState?: string;
   storeId?: string;
-  /** CSRF/state for the Instagram OAuth round-trip — kept separate from
-   *  oauthState so an in-flight ikas connect can't collide with it. */
-  instagramOauthState?: string;
 }
 
 const isProd = process.env.NODE_ENV === "production";

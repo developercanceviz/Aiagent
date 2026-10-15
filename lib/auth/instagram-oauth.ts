@@ -1,4 +1,7 @@
+import { randomUUID } from "node:crypto";
+
 import { env } from "@/lib/config/env";
+import { encryptSecret, decryptSecret } from "@/lib/crypto/secrets";
 
 /**
  * "Instagram API with Instagram Login" OAuth helpers — a standalone login
@@ -15,6 +18,41 @@ import { env } from "@/lib/config/env";
  */
 
 const SCOPES = "instagram_business_basic,instagram_business_manage_messages";
+
+/**
+ * The OAuth `state` param doubles as the CSRF token AND the only reliable
+ * way to carry the merchant's identity across this round-trip: the whole
+ * dashboard runs inside ikas's admin iframe, and the session cookie is
+ * scoped to that embedding (CHIPS-partitioned) — the moment the browser
+ * leaves for Instagram's consent screen (same tab or a new one; Instagram
+ * refuses to be framed at all, confirmed live), it's a different top-level
+ * context and the cookie simply isn't sent. AES-GCM's auth tag makes this
+ * tamper-evident, not just opaque — decrypt fails outright on any edit.
+ */
+export function signInstagramOAuthState(merchantId: string): string {
+  const payload = JSON.stringify({
+    merchantId,
+    nonce: randomUUID(),
+    exp: Date.now() + 10 * 60 * 1000, // 10 minutes — generous for a login+approve click-through
+  });
+  return encryptSecret(payload);
+}
+
+/** Returns the merchantId if `state` is well-formed, untampered, and not
+ *  expired; null otherwise (never throws — a bad state is just a failed
+ *  connect attempt, not a server error). */
+export function verifyInstagramOAuthState(state: string): string | null {
+  try {
+    const payload = JSON.parse(decryptSecret(state)) as {
+      merchantId?: string;
+      exp?: number;
+    };
+    if (!payload.merchantId || !payload.exp || Date.now() > payload.exp) return null;
+    return payload.merchantId;
+  } catch {
+    return null;
+  }
+}
 
 export function buildInstagramAuthorizeUrl(args: {
   state: string;
