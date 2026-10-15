@@ -49,15 +49,22 @@ export async function GET(req: NextRequest) {
   const redirectUri = `${env.deployUrl}/api/auth/instagram/callback`;
 
   let longLived;
+  let shortLivedMeta: { user_id: string; permissions?: string } | undefined;
   try {
     const shortLived = await exchangeInstagramCode({ code, redirectUri });
+    // Never logged/returned: the token itself. user_id + granted permissions
+    // are safe, non-sensitive diagnostics — cheap to have on hand if the next
+    // call fails, expensive to not have (means asking the merchant to click
+    // through the whole login flow again just to find out).
+    shortLivedMeta = { user_id: shortLived.user_id, permissions: shortLived.permissions };
     longLived = await exchangeForLongLivedToken(shortLived.access_token);
   } catch (err) {
-    console.error("[instagram:callback] token exchange failed", err);
+    console.error("[instagram:callback] token exchange failed", err, shortLivedMeta);
     return NextResponse.json(
       {
         error: "Instagram token exchange failed",
         detail: err instanceof Error ? err.message : "unknown",
+        shortLivedMeta,
       },
       { status: 502 }
     );

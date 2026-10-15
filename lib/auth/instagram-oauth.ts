@@ -127,26 +127,30 @@ export interface LongLivedTokenResponse {
  * short-lived token → long-lived token (valid ~60 days, refreshable up to
  * that expiry via refreshLongLivedToken — NOT after, confirmed live).
  *
- * Meta's own docs show this as a GET — confirmed wrong live, twice, with the
- * token itself verified correct both times (ruled out by fixing the data[]
- * unwrap bug first and re-testing): GET gets "Unsupported request - method
- * type: get" (IGApiException code 100) regardless. Sending the identical
- * params as POST instead, matching the exchangeInstagramCode call that does
- * work.
+ * Both GET and POST against the v21.0-prefixed URL failed live with the
+ * exact same templated error, just echoing back whichever method was sent
+ * ("Unsupported request - method type: get" / "...post", IGApiException
+ * code 100) — strong evidence that error text is generic/unrelated to
+ * method, from a request that isn't resolving to the real handler at all.
+ * instagram_business_manage_messages is confirmed Standard/Active with
+ * 16k+ real calls already on this app, ruling out a permissions cause.
+ * This is now the literal, unversioned GET shape straight from Meta's
+ * dedicated reference doc (developers.facebook.com/docs/instagram-platform/
+ * reference/access_token/) — the one clean combination not yet tried with a
+ * confirmed-correct token (the data[] unwrap bug tainted the first GET
+ * attempt). If this ALSO fails, the version prefix and method were both
+ * red herrings and the real cause is elsewhere (e.g. the short-lived token
+ * needs to be used only once / within a tighter window than assumed).
  */
 export async function exchangeForLongLivedToken(
   shortLivedToken: string
 ): Promise<LongLivedTokenResponse> {
-  const body = new URLSearchParams({
+  const params = new URLSearchParams({
     grant_type: "ig_exchange_token",
     client_secret: env.instagramAppSecret ?? "",
     access_token: shortLivedToken,
   });
-  const res = await fetch("https://graph.instagram.com/v21.0/access_token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body,
-  });
+  const res = await fetch(`https://graph.instagram.com/access_token?${params.toString()}`);
   if (!res.ok) {
     throw new Error(`Instagram long-lived token exchange failed: ${res.status} ${await res.text()}`);
   }
