@@ -71,7 +71,21 @@ export function buildInstagramAuthorizeUrl(args: {
 interface ShortLivedTokenResponse {
   access_token: string;
   user_id: string;
-  permissions?: string[];
+  permissions?: string;
+}
+
+/**
+ * api.instagram.com/oauth/access_token wraps its result in a `data` array —
+ * {"data":[{"access_token":"...","user_id":"...","permissions":"..."}]} —
+ * confirmed against Meta's own docs after a live failure: the un-wrapped
+ * shape was assumed here, so `access_token` read as undefined and the
+ * literal string "undefined" got sent as the token on the next call. Meta's
+ * error for that was the unhelpful "Unsupported request - method type: get"
+ * (IGApiException code 100) — worth remembering if that message resurfaces,
+ * since it does not actually mean what it says.
+ */
+interface ShortLivedTokenApiResponse {
+  data: ShortLivedTokenResponse[];
 }
 
 /** code → short-lived token (valid ~1 hour). Must be exchanged for a
@@ -95,7 +109,12 @@ export async function exchangeInstagramCode(args: {
   if (!res.ok) {
     throw new Error(`Instagram code exchange failed: ${res.status} ${await res.text()}`);
   }
-  return (await res.json()) as ShortLivedTokenResponse;
+  const json = (await res.json()) as ShortLivedTokenApiResponse | ShortLivedTokenResponse;
+  const result = "data" in json ? json.data[0] : json;
+  if (!result?.access_token) {
+    throw new Error(`Instagram code exchange returned no access_token: ${JSON.stringify(json)}`);
+  }
+  return result;
 }
 
 export interface LongLivedTokenResponse {
@@ -114,7 +133,7 @@ export async function exchangeForLongLivedToken(
     client_secret: env.instagramAppSecret ?? "",
     access_token: shortLivedToken,
   });
-  const res = await fetch(`https://graph.instagram.com/access_token?${params.toString()}`);
+  const res = await fetch(`https://graph.instagram.com/v21.0/access_token?${params.toString()}`);
   if (!res.ok) {
     throw new Error(`Instagram long-lived token exchange failed: ${res.status} ${await res.text()}`);
   }
@@ -132,7 +151,7 @@ export async function refreshLongLivedInstagramToken(
     grant_type: "ig_refresh_token",
     access_token: currentToken,
   });
-  const res = await fetch(`https://graph.instagram.com/refresh_access_token?${params.toString()}`);
+  const res = await fetch(`https://graph.instagram.com/v21.0/refresh_access_token?${params.toString()}`);
   if (!res.ok) return null;
   return (await res.json()) as LongLivedTokenResponse;
 }
