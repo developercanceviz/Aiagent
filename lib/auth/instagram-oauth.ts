@@ -127,26 +127,24 @@ export interface LongLivedTokenResponse {
  * short-lived token → long-lived token (valid ~60 days, refreshable up to
  * that expiry via refreshLongLivedToken — NOT after, confirmed live).
  *
- * Both GET and POST against the v21.0-prefixed URL failed live with the
- * exact same templated error, just echoing back whichever method was sent
- * ("Unsupported request - method type: get" / "...post", IGApiException
- * code 100) — strong evidence that error text is generic/unrelated to
- * method, from a request that isn't resolving to the real handler at all.
- * instagram_business_manage_messages is confirmed Standard/Active with
- * 16k+ real calls already on this app, ruling out a permissions cause.
- * This is now the literal, unversioned GET shape straight from Meta's
- * dedicated reference doc (developers.facebook.com/docs/instagram-platform/
- * reference/access_token/) — the one clean combination not yet tried with a
- * confirmed-correct token (the data[] unwrap bug tainted the first GET
- * attempt). If this ALSO fails, the version prefix and method were both
- * red herrings and the real cause is elsewhere (e.g. the short-lived token
- * needs to be used only once / within a tighter window than assumed).
+ * Confirmed live, methodically: GET and POST, versioned and unversioned URL
+ * (4 clean combinations) all fail identically — "Unsupported request -
+ * method type: <whatever was sent>" (IGApiException code 100) — with a real,
+ * freshly-issued, correctly-permissioned short-lived token (verified via its
+ * own user_id + granted-permissions response). A deliberately garbage token
+ * against this same endpoint gets a completely different, sensible error
+ * ("Cannot parse access token"), which rules out method/version/routing: the
+ * endpoint itself works and validates tokens — ours is specifically
+ * triggering this path. Adding client_id defensively, since it's the one
+ * parameter difference from exchangeInstagramCode's call (which works) that
+ * hasn't been tried, even though Meta's docs don't list it here.
  */
 export async function exchangeForLongLivedToken(
   shortLivedToken: string
 ): Promise<LongLivedTokenResponse> {
   const params = new URLSearchParams({
     grant_type: "ig_exchange_token",
+    client_id: env.instagramAppId ?? "",
     client_secret: env.instagramAppSecret ?? "",
     access_token: shortLivedToken,
   });
