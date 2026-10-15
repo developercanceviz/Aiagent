@@ -123,17 +123,30 @@ export interface LongLivedTokenResponse {
   expires_in: number; // seconds, ~60 days
 }
 
-/** short-lived token → long-lived token (valid ~60 days, refreshable up to
- *  that expiry via refreshLongLivedToken — NOT after, confirmed live). */
+/**
+ * short-lived token → long-lived token (valid ~60 days, refreshable up to
+ * that expiry via refreshLongLivedToken — NOT after, confirmed live).
+ *
+ * Meta's own docs show this as a GET — confirmed wrong live, twice, with the
+ * token itself verified correct both times (ruled out by fixing the data[]
+ * unwrap bug first and re-testing): GET gets "Unsupported request - method
+ * type: get" (IGApiException code 100) regardless. Sending the identical
+ * params as POST instead, matching the exchangeInstagramCode call that does
+ * work.
+ */
 export async function exchangeForLongLivedToken(
   shortLivedToken: string
 ): Promise<LongLivedTokenResponse> {
-  const params = new URLSearchParams({
+  const body = new URLSearchParams({
     grant_type: "ig_exchange_token",
     client_secret: env.instagramAppSecret ?? "",
     access_token: shortLivedToken,
   });
-  const res = await fetch(`https://graph.instagram.com/v21.0/access_token?${params.toString()}`);
+  const res = await fetch("https://graph.instagram.com/v21.0/access_token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body,
+  });
   if (!res.ok) {
     throw new Error(`Instagram long-lived token exchange failed: ${res.status} ${await res.text()}`);
   }
