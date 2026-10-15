@@ -58,6 +58,19 @@ export const env = {
   get deployUrl() {
     return process.env.NEXT_PUBLIC_DEPLOY_URL ?? "http://localhost:3000";
   },
+  /**
+   * "Instagram API with Instagram Login" app credentials, used only for the
+   * OAuth connect flow (app/api/auth/instagram/*). Meta sometimes has this
+   * as its own standalone app distinct from the one signing webhooks
+   * (META_APP_SECRET) — falls back to that pair so a single-app setup still
+   * works without extra config.
+   */
+  get instagramAppId() {
+    return process.env.INSTAGRAM_APP_ID || process.env.META_APP_ID;
+  },
+  get instagramAppSecret() {
+    return process.env.INSTAGRAM_APP_SECRET || process.env.META_APP_SECRET;
+  },
 };
 
 export const isConfigured = {
@@ -67,6 +80,7 @@ export const isConfigured = {
   supabase: () => Boolean(env.supabaseUrl),
   embeddings: () => Boolean(env.embeddingsKey),
   qstash: () => Boolean(env.qstashToken),
+  instagramOAuth: () => Boolean(env.instagramAppId && env.instagramAppSecret),
 };
 
 /** Thrown by API routes when a required service isn't configured yet. */

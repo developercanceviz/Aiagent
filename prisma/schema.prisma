@@ -140,17 +140,21 @@ model Agent {
 }
 
 model Channel {
-  id          String        @id @default(cuid())
-  merchantId  String
-  agentId     String?
-  type        ChannelType
-  displayName String
-  externalId  String? // page id / phone number id / ig id
-  credentials String? // ENCRYPTED JSON
-  aiEnabled   Boolean       @default(true)
-  status      ChannelStatus @default(DISCONNECTED)
-  merchant    Merchant      @relation(fields: [merchantId], references: [id], onDelete: Cascade)
-  agent       Agent?        @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  id             String        @id @default(cuid())
+  merchantId     String
+  agentId        String?
+  type           ChannelType
+  displayName    String
+  externalId     String? // page id / phone number id / ig id
+  credentials    String? // ENCRYPTED JSON
+  /** Set for OAuth-connected channels (Instagram) so a background job can
+   *  refresh before expiry — manually-pasted tokens (WhatsApp/Messenger
+   *  today) leave this null. */
+  tokenExpiresAt DateTime?
+  aiEnabled      Boolean       @default(true)
+  status         ChannelStatus @default(DISCONNECTED)
+  merchant       Merchant      @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  agent          Agent?        @relation(fields: [agentId], references: [id], onDelete: SetNull)
 
   @@index([merchantId])
   @@map("channels")

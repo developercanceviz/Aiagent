@@ -1,6 +1,8 @@
 "use client";
 
+import { Suspense } from "react";
 import { CheckCircle2, Info, Link2, RefreshCw, RotateCcw } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 
 import { useI18n } from "@/lib/i18n/provider";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +14,27 @@ const connected: { kind: ChannelKind; name: string; sub: string }[] = [
   { kind: "whatsapp", name: "WhatsApp Business", sub: "+90 553 522 98 95 · Can Ceviz Müşteri Destek Asistanı" },
   { kind: "messenger", name: "Facebook Messenger", sub: "Canceviz hurma · Can Ceviz Müşteri Destek Asistanı" },
 ];
+
+/** Reconnect action per channel kind — only Instagram has a real OAuth flow
+ *  today (app/api/auth/instagram/*); WhatsApp/Messenger still go through the
+ *  manual paste-a-token form below until the same flow is built for them. */
+function reconnectHref(kind: ChannelKind): string | null {
+  return kind === "instagram" ? "/api/auth/instagram/authorize" : null;
+}
+
+/** Reads the ?instagram=connected redirect param — isolated in its own
+ *  component so only this sliver needs the Suspense boundary useSearchParams
+ *  requires on a statically-rendered page, not the whole settings page. */
+function InstagramConnectedBanner() {
+  const searchParams = useSearchParams();
+  if (searchParams.get("instagram") !== "connected") return null;
+  return (
+    <div className="flex items-center gap-2.5 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+      <CheckCircle2 className="size-4 shrink-0" />
+      Instagram yeniden bağlandı — yeni bağlantı ~60 gün geçerli.
+    </div>
+  );
+}
 
 export default function KanallarPage() {
   const { t } = useI18n();
@@ -30,6 +53,10 @@ export default function KanallarPage() {
           </div>
         </div>
       </div>
+
+      <Suspense fallback={null}>
+        <InstagramConnectedBanner />
+      </Suspense>
 
       <div className="flex items-center gap-3 px-1 text-sm text-muted-foreground">
         <span className="flex items-center gap-1.5">
@@ -57,12 +84,25 @@ export default function KanallarPage() {
               </div>
               <p className="truncate text-xs text-muted-foreground">{c.sub}</p>
             </div>
-            <button
-              className="flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent"
-              aria-label="Yeniden bağlan"
-            >
-              <RotateCcw className="size-4" />
-            </button>
+            {reconnectHref(c.kind) ? (
+              <a
+                href={reconnectHref(c.kind)!}
+                className="flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent"
+                aria-label="Yeniden bağlan"
+                title="Yeniden bağlan"
+              >
+                <RotateCcw className="size-4" />
+              </a>
+            ) : (
+              <button
+                className="flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent"
+                aria-label="Yeniden bağlan"
+                disabled
+                title="Bu kanal için otomatik yeniden bağlama henüz yok — aşağıdaki formu kullanın."
+              >
+                <RotateCcw className="size-4" />
+              </button>
+            )}
           </div>
         ))}
       </div>
