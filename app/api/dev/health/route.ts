@@ -73,12 +73,15 @@ export async function GET(req: Request) {
     // secret (Instagram and WhatsApp are separate apps). Counting them is how
     // "did my env change land?" gets answered without exposing a value.
     meta: {
+      appId: process.env.META_APP_ID ?? null,
       verifyTokenSet: Boolean(process.env.META_VERIFY_TOKEN),
       appSecretSet: Boolean(process.env.META_APP_SECRET),
       extraAppSecrets: (process.env.META_APP_SECRETS ?? "")
         .split(",")
         .map((s) => s.trim())
         .filter(Boolean).length,
+      instagramAppId: process.env.INSTAGRAM_APP_ID ?? null,
+      instagramAppSecretSet: Boolean(process.env.INSTAGRAM_APP_SECRET),
     },
   });
 }
